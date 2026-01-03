@@ -1,6 +1,10 @@
 # block.py
 import pygame
+import math
 from settings import *
+
+def lerp(start, end, amount):
+    return start + (end - start) * amount
 
 class Block:
     def __init__(self, shape_key):
@@ -10,11 +14,23 @@ class Block:
         self.color = self.base_color
         self.update_dimensions()
         
+        # MANTIKSAL KONUM (Oyunun gördüğü gerçek kutu)
         self.rect = pygame.Rect(0, 0, self.width, self.height)
         self.original_pos = (0, 0)
+        
+        # GÖRSEL KONUM (Gözün gördüğü)
+        # Başlangıçta 0,0 olmamalı, game.py bunu hemen güncelleyecek
+        self.visual_x = 0
+        self.visual_y = 0
+        
         self.dragging = False
         self.offset_x = 0
         self.offset_y = 0
+        
+        self.target_rotation = 0
+        self.current_rotation = 0
+        self.scale = 1.0
+        self.target_scale = 1.0
 
     def update_dimensions(self):
         self.rows = len(self.matrix)
@@ -27,71 +43,83 @@ class Block:
         self.update_dimensions()
         self.rect.width = self.width
         self.rect.height = self.height
+        self.current_rotation += 90 
 
-    def flip(self):
-        self.matrix = [row[::-1] for row in self.matrix]
-        self.update_dimensions()
+    def update(self):
+        # 1. Animasyon Hedefleri
+        if self.dragging:
+            self.target_scale = 1.1 
+            # Tilt: Görsel gerideyse eğil
+            delta_x = self.rect.x - self.visual_x
+            self.target_rotation = -delta_x * 0.5 
+            self.target_rotation = max(-15, min(15, self.target_rotation))
+        else:
+            self.target_scale = 1.0 
+            self.target_rotation = 0
+
+        # 2. GÖRSELİ, RECT'E DOĞRU ÇEK (Lerp)
+        # Rect nereye giderse görsel oraya "sünerek" gelir.
+        self.visual_x = lerp(self.visual_x, self.rect.x, 0.3) # 0.3 = Hız (Daha sıkı takip)
+        self.visual_y = lerp(self.visual_y, self.rect.y, 0.3)
+        
+        self.scale = lerp(self.scale, self.target_scale, 0.2)
+        self.current_rotation = lerp(self.current_rotation, self.target_rotation, 0.2)
 
     def draw(self, surface, x, y, scale=1.0, alpha=255, theme_type='glass'):
-        current_tile_size = int(TILE_SIZE * scale)
+        # Çizim görsel koordinatlarda yapılır
+        draw_x = self.visual_x
+        draw_y = self.visual_y
         
-        # Tema Ayarları
+        # Eğer dışarıdan override koordinat geliyorsa (Ghost Piece gibi)
+        # O zaman görseli değil, o koordinatı kullan
+        if x != 0 and y != 0: 
+            # (Ghost piece 0,0'a çizilmez, bu basit bir kontrol)
+            draw_x = x
+            draw_y = y
+
+        final_scale = scale * self.scale
+        
+        surf_w = int(self.width * final_scale * 1.5)
+        surf_h = int(self.height * final_scale * 1.5)
+        temp_surface = pygame.Surface((surf_w, surf_h), pygame.SRCALPHA)
+        
+        current_tile_size = int(TILE_SIZE * final_scale)
         gap = 0
         if theme_type == 'glass': gap = int(current_tile_size * 0.1)
-        elif theme_type == 'pixel': gap = 0 # Retroda boşluk olmaz, bitişik durur
-        elif theme_type == 'flat': gap = int(current_tile_size * 0.15) # Candy'de tombul boşluk
+        elif theme_type == 'flat': gap = int(current_tile_size * 0.15)
 
         block_size = current_tile_size - gap
-
-        # Şeffaflık Yüzeyi
-        if alpha < 255:
-            temp_surface = pygame.Surface((self.width * scale + 10, self.height * scale + 10), pygame.SRCALPHA)
-            dx, dy = 0, 0
-        else:
-            temp_surface = surface
-            dx, dy = x, y
+        
+        start_x = (surf_w - (self.cols * current_tile_size)) // 2
+        start_y = (surf_h - (self.rows * current_tile_size)) // 2
 
         for r_idx, row in enumerate(self.matrix):
             for c_idx, val in enumerate(row):
                 if val == 1:
-                    bx = dx + (c_idx * current_tile_size) + (gap // 2)
-                    by = dy + (r_idx * current_tile_size) + (gap // 2)
+                    bx = start_x + (c_idx * current_tile_size) + (gap // 2)
+                    by = start_y + (r_idx * current_tile_size) + (gap // 2)
                     rect = pygame.Rect(bx, by, block_size, block_size)
 
-                    # --- STİL 1: NEON / GLASS (Mevcut Stil) ---
                     if theme_type == 'glass':
-                        if alpha < 255:
-                            pygame.draw.rect(temp_surface, (*self.color, alpha), rect, border_radius=8)
-                        else:
-                            dark_color = (max(0, self.color[0]-50), max(0, self.color[1]-50), max(0, self.color[2]-50))
-                            pygame.draw.rect(temp_surface, dark_color, rect, border_radius=8)
-                            center_rect = rect.inflate(-15, -15)
-                            pygame.draw.rect(temp_surface, (min(255, self.color[0]+50), min(255, self.color[1]+50), min(255, self.color[2]+50)), center_rect, border_radius=6)
-                            pygame.draw.rect(temp_surface, self.color, rect, 2, border_radius=8)
-
-                    # --- STİL 2: RETRO / PIXEL ---
+                        dark_color = (max(0, self.color[0]-50), max(0, self.color[1]-50), max(0, self.color[2]-50))
+                        pygame.draw.rect(temp_surface, dark_color, rect, border_radius=6)
+                        center = rect.inflate(-10, -10)
+                        pygame.draw.rect(temp_surface, (min(255, self.color[0]+80), min(255, self.color[1]+80), min(255, self.color[2]+80)), center, border_radius=4)
+                        pygame.draw.rect(temp_surface, self.color, rect, 2, border_radius=6)
                     elif theme_type == 'pixel':
-                        # Düz renk, radius yok, kalın siyah kenar
-                        c = self.color
-                        if alpha < 255: c = (*c, alpha)
-                        pygame.draw.rect(temp_surface, c, rect) # Köşeli
-                        # İçine piksel deseni (X çiz)
-                        pygame.draw.line(temp_surface, (0,0,0), rect.topleft, rect.bottomright, 2)
-                        pygame.draw.line(temp_surface, (0,0,0), rect.bottomleft, rect.topright, 2)
-                        pygame.draw.rect(temp_surface, (0,0,0), rect, 3) # Kalın siyah çerçeve
-
-                    # --- STİL 3: CANDY / FLAT ---
+                         pygame.draw.rect(temp_surface, self.color, rect)
+                         pygame.draw.rect(temp_surface, (0,0,0), rect, 2)
                     elif theme_type == 'flat':
-                        # Çok yuvarlak, pastel, kenar çizgisi yok
-                        c = self.color
-                        # Rengi pastelleştir (Beyazla karıştır)
-                        pastel_c = ((c[0]+255)//2, (c[1]+255)//2, (c[2]+255)//2)
-                        if alpha < 255: pastel_c = (*pastel_c, alpha)
-                        
-                        pygame.draw.rect(temp_surface, pastel_c, rect, border_radius=15)
-                        # Minik beyaz parıltı (Jelibon gibi)
-                        shine_rect = pygame.Rect(bx + block_size//4, by + block_size//4, block_size//4, block_size//4)
-                        pygame.draw.circle(temp_surface, (255, 255, 255, 150) if alpha < 255 else (255,255,255), shine_rect.center, 4)
+                        pygame.draw.rect(temp_surface, self.color, rect, border_radius=10)
 
         if alpha < 255:
-            surface.blit(temp_surface, (x, y))
+            temp_surface.set_alpha(alpha)
+
+        if self.current_rotation != 0:
+            rotated_surf = pygame.transform.rotate(temp_surface, self.current_rotation)
+            new_rect = rotated_surf.get_rect(center=(draw_x + self.width//2, draw_y + self.height//2))
+            surface.blit(rotated_surf, new_rect)
+        else:
+            offset_x = (surf_w - self.width) // 2
+            offset_y = (surf_h - self.height) // 2
+            surface.blit(temp_surface, (draw_x - offset_x, draw_y - offset_y))
