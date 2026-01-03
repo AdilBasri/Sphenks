@@ -11,6 +11,7 @@ class VoidWidget(pygame.sprite.Sprite):
         try:
             base_path = os.path.dirname(os.path.abspath(__file__))
             path = os.path.join(base_path, "assets", "void.png")
+            # Void animasyonu şeffaflık içerdiği için convert_alpha kullanıyoruz
             sprite_sheet = pygame.image.load(path).convert_alpha()
         except FileNotFoundError:
             sprite_sheet = pygame.Surface((64, 16), pygame.SRCALPHA)
@@ -57,65 +58,142 @@ class UIManager:
         self.font_big = pygame.font.SysFont(FONT_NAME, BIG_FONT_SIZE, bold=True)
         self.title_font = pygame.font.SysFont(FONT_NAME, 60, bold=True)
         
-        # Void Widget: Sağ Alt Köşe
         self.void_widget = VoidWidget(VIRTUAL_W - 20, VIRTUAL_H - 20, scale=0.8)
         
+        # Arkaplan Sistemi
         self.bg_tiles = []
         self.tile_w = 0
         self.tile_h = 0
+        self.ra_frames = []
+        self.symbol_images = []
+        
         self.load_bg_assets()
 
     def load_bg_assets(self):
+        base_path = os.path.dirname(os.path.abspath(__file__))
+        
+        # 1. RA Yükle (Animasyonlu)
         try:
-            base_path = os.path.dirname(os.path.abspath(__file__))
-            path = os.path.join(base_path, "assets", "ra.png")
-            if os.path.exists(path):
-                sprite_sheet = pygame.image.load(path).convert_alpha()
+            ra_path = os.path.join(base_path, "assets", "ra.png")
+            if os.path.exists(ra_path):
+                # convert() kullanıyoruz ki pixel manipülasyonu yapabilelim
+                sprite_sheet = pygame.image.load(ra_path).convert()
+                
+                # --- RENK TEMİZLEME (CHROMA KEY) ---
+                # Resmin sol üst köşesindeki rengi al (Sarı/Altın)
+                bg_color_key = sprite_sheet.get_at((0, 0))
+                # O rengi şeffaf yap
+                sprite_sheet.set_colorkey(bg_color_key)
+                
                 sheet_w, sheet_h = sprite_sheet.get_size()
-                total_frames = 6
-                active_frames = 5
-                frame_w = sheet_w // total_frames
+                frame_w = sheet_w // 6 
                 frame_h = sheet_h
-                scale = 1.0
-                self.tile_w = int(frame_w * scale)
-                self.tile_h = int(frame_h * scale)
-                self.bg_frames = []
-                for i in range(active_frames):
+                
+                self.tile_w = frame_w
+                self.tile_h = frame_h
+                
+                for i in range(5): 
+                    # Transparent yüzey oluştur
                     frame = pygame.Surface((frame_w, frame_h), pygame.SRCALPHA)
+                    # frame.set_colorkey(bg_color_key) # Gerekirse buraya da eklenir
                     frame.blit(sprite_sheet, (0, 0), (i * frame_w, 0, frame_w, frame_h))
-                    self.bg_frames.append(frame)
-                cols = VIRTUAL_W // self.tile_w + 1
-                rows = VIRTUAL_H // self.tile_h + 1
-                for r in range(rows):
-                    row_data = []
-                    for c in range(cols):
-                        row_data.append({'frame': 0, 'animating': False, 'timer': 0})
-                    self.bg_tiles.append(row_data)
+                    self.ra_frames.append(frame)
         except Exception as e:
-            print(f"BG Load Error: {e}")
+            print(f"Ra Load Error: {e}")
+
+        # 2. Yeni Sembolleri Yükle (img_1, img_2, img_3)
+        for name in ["img_1.png", "img_2.png", "img_3.png"]:
+            try:
+                path = os.path.join(base_path, "assets", name)
+                if os.path.exists(path):
+                    img = pygame.image.load(path).convert()
+                    
+                    # --- RENK TEMİZLEME ---
+                    bg_color_key = img.get_at((0, 0))
+                    img.set_colorkey(bg_color_key)
+                    
+                    # Ra boyutuna ölçekle
+                    if self.tile_w > 0:
+                        img = pygame.transform.scale(img, (self.tile_w, self.tile_h))
+                    self.symbol_images.append(img)
+            except Exception as e:
+                print(f"Symbol Load Error {name}: {e}")
+
+        # 3. Grid Oluştur ve Rastgele Dağıt
+        if self.tile_w > 0:
+            cols = VIRTUAL_W // self.tile_w + 1
+            rows = VIRTUAL_H // self.tile_h + 1
+            
+            for r in range(rows):
+                row_data = []
+                for c in range(cols):
+                    # %70 Ra, %30 Sembol
+                    tile_type = 'ra' if random.random() > 0.3 else 'symbol'
+                    
+                    if tile_type == 'symbol' and not self.symbol_images:
+                        tile_type = 'ra'
+                    
+                    tile = {
+                        'type': tile_type,
+                        'is_hovered': False, # Mouse şu an üzerinde mi?
+                        
+                        # RA verileri
+                        'frame': 0,
+                        'animating': False,
+                        'timer': 0,
+                        
+                        # SYMBOL verileri
+                        'img_idx': 0,
+                        'flipped_x': False # Yatay ayna durumu
+                    }
+                    
+                    if tile_type == 'symbol':
+                        tile['img_idx'] = random.randint(0, len(self.symbol_images) - 1)
+                        # Rastgele başlangıç yönü
+                        if random.random() > 0.5: tile['flipped_x'] = True
+                        
+                    row_data.append(tile)
+                self.bg_tiles.append(row_data)
 
     def update(self):
         self.void_widget.update()
+        
         if self.bg_tiles:
             mx, my = pygame.mouse.get_pos()
             rows = len(self.bg_tiles)
             cols = len(self.bg_tiles[0])
+            
             for r in range(rows):
                 for c in range(cols):
                     tile = self.bg_tiles[r][c]
-                    if not tile['animating']:
-                        rect = pygame.Rect(c*self.tile_w, r*self.tile_h, self.tile_w, self.tile_h)
-                        if rect.collidepoint(mx, my):
+                    
+                    # Hitbox
+                    rect = pygame.Rect(c*self.tile_w, r*self.tile_h, self.tile_w, self.tile_h)
+                    currently_hovering = rect.collidepoint(mx, my)
+                    
+                    # --- RA MANTIĞI ---
+                    if tile['type'] == 'ra':
+                        if currently_hovering and not tile['animating']:
                             tile['animating'] = True
                             tile['frame'] = 1
-                    if tile['animating']:
-                        tile['timer'] += 1
-                        if tile['timer'] > 5:
-                            tile['timer'] = 0
-                            tile['frame'] += 1
-                            if tile['frame'] >= len(self.bg_frames):
-                                tile['frame'] = 0
-                                tile['animating'] = False
+                        
+                        if tile['animating']:
+                            tile['timer'] += 1
+                            if tile['timer'] > 5:
+                                tile['timer'] = 0
+                                tile['frame'] += 1
+                                if tile['frame'] >= len(self.ra_frames):
+                                    tile['frame'] = 0
+                                    tile['animating'] = False
+                                    
+                    # --- SEMBOL MANTIĞI (FLIP) ---
+                    elif tile['type'] == 'symbol':
+                        # Mouse yeni girdiyse (önceki karede yoktu, şimdi var)
+                        if currently_hovering and not tile['is_hovered']:
+                            tile['flipped_x'] = not tile['flipped_x'] # Ters çevir
+                        
+                        # Durumu güncelle
+                        tile['is_hovered'] = currently_hovering
 
     def draw_bg(self, surface):
         surface.fill(BG_COLOR)
@@ -125,15 +203,33 @@ class UIManager:
             for r in range(rows):
                 for c in range(cols):
                     tile = self.bg_tiles[r][c]
-                    frame_idx = tile['frame']
-                    img = self.bg_frames[frame_idx]
-                    img.set_alpha(100) 
-                    surface.blit(img, (c*self.tile_w, r*self.tile_h))
+                    x, y = c*self.tile_w, r*self.tile_h
+                    
+                    img = None
+                    if tile['type'] == 'ra' and self.ra_frames:
+                        img = self.ra_frames[tile['frame']]
+                        
+                    elif tile['type'] == 'symbol' and self.symbol_images:
+                        base_img = self.symbol_images[tile['img_idx']]
+                        if tile['flipped_x']:
+                            img = pygame.transform.flip(base_img, True, False)
+                        else:
+                            img = base_img
+                    
+                    if img:
+                        # Hafif şeffaflık (Arkaplanı boğmasın diye)
+                        # Not: set_alpha, set_colorkey ile bazen çakışabilir ama
+                        # convert() kullandığımız için sorun olmamalı.
+                        # img.set_alpha(100) # Gerekirse açın
+                        surface.blit(img, (x, y))
+                        
+        # Vignette (Kenar karartma)
         o = pygame.Surface((VIRTUAL_W, VIRTUAL_H), pygame.SRCALPHA)
         pygame.draw.rect(o, (10, 5, 20, 150), o.get_rect())
         surface.blit(o, (0,0))
 
     def draw_sidebar(self, surface, game):
+        # Panel Gövdesi
         panel_rect = pygame.Rect(0, 0, SIDEBAR_WIDTH, VIRTUAL_H)
         pygame.draw.rect(surface, SIDEBAR_BG_COLOR, panel_rect)
         pygame.draw.line(surface, PANEL_BORDER, (SIDEBAR_WIDTH, 0), (SIDEBAR_WIDTH, VIRTUAL_H), 4)
@@ -141,15 +237,18 @@ class UIManager:
         cx = SIDEBAR_WIDTH // 2
         y_cursor = 30
         
+        # Ante
         ante_txt = self.font_bold.render(f"ANTE {game.ante} / 8", True, (200, 200, 200))
         surface.blit(ante_txt, ante_txt.get_rect(center=(cx, y_cursor)))
         y_cursor += 30
         
+        # Round
         round_name = ["Small Blind", "Big Blind", "Boss Blind"][game.round - 1]
         round_lbl = self.font_bold.render(round_name, True, TOTAL_COLOR)
         surface.blit(round_lbl, round_lbl.get_rect(center=(cx, y_cursor)))
         y_cursor += 30
         
+        # Goal
         goal_lbl = self.font_small.render(f"Goal: {game.level_target}", True, (150, 150, 150))
         surface.blit(goal_lbl, goal_lbl.get_rect(center=(cx, y_cursor)))
         y_cursor += 40
@@ -163,6 +262,7 @@ class UIManager:
         box_cx = score_box.centerx
         box_y = score_box.y + 20
         
+        # Chips
         chips_val = game.scoring_data['base'] if game.state == STATE_SCORING else 0
         chips_txt = self.font_score.render(str(chips_val), True, CHIPS_COLOR)
         surface.blit(chips_txt, chips_txt.get_rect(midleft=(score_box.x + 20, box_y)))
@@ -170,9 +270,11 @@ class UIManager:
         lbl_chips = self.font_small.render("Chips", True, CHIPS_COLOR)
         surface.blit(lbl_chips, lbl_chips.get_rect(midleft=(score_box.x + 20, box_y + 20)))
         
+        # X
         x_txt = self.font_bold.render("X", True, (255,255,255))
         surface.blit(x_txt, x_txt.get_rect(center=(box_cx, box_y + 10)))
         
+        # Mult
         mult_val = game.scoring_data['mult'] if game.state == STATE_SCORING else 0.0
         mult_txt = self.font_score.render(f"{mult_val:.1f}", True, MULT_COLOR)
         surface.blit(mult_txt, mult_txt.get_rect(midright=(score_box.right - 20, box_y)))
@@ -194,6 +296,7 @@ class UIManager:
         
         y_cursor += score_box_h + 30
         
+        # Genel Skor
         lbl_round_score = self.font_reg.render("Round Score", True, (150, 150, 150))
         surface.blit(lbl_round_score, lbl_round_score.get_rect(center=(cx, y_cursor)))
         y_cursor += 30
@@ -203,18 +306,14 @@ class UIManager:
         curr_score_txt = self.font_score.render(str(game.score), True, sc_col)
         surface.blit(curr_score_txt, curr_score_txt.get_rect(center=(cx, y_cursor)))
         
-        # --- MENU BUTONU ---
+        # Menu Butonu
         menu_btn = pygame.Rect(30, VIRTUAL_H - 60, SIDEBAR_WIDTH - 60, 40)
         col = (70, 60, 80)
         if menu_btn.collidepoint(pygame.mouse.get_pos()): col = (90, 80, 100)
         pygame.draw.rect(surface, col, menu_btn, border_radius=8)
         pygame.draw.rect(surface, (150, 150, 150), menu_btn, 1, border_radius=8)
-        
         menu_txt = self.font_bold.render("MENU", True, (255, 255, 255))
         surface.blit(menu_txt, menu_txt.get_rect(center=menu_btn.center))
-        
-        # Bu rect'i game loop'ta tıklama için kullanacağız, return edebilir veya game objesine atayabiliriz
-        # Pratik olması için game objesine bir attrib olarak ekleyelim (hacky ama hızlı çözüm)
         game.menu_btn_rect = menu_btn
 
     def draw_hud_elements(self, surface, game):
@@ -223,11 +322,10 @@ class UIManager:
         v_txt = self.font_bold.render(str(game.void_count), True, (255,255,255))
         surface.blit(v_txt, v_txt.get_rect(center=self.void_widget.rect.center))
         
-        # Para (Sağ Üst Köşe)
+        # Para (Sağ Üst)
         m_bg = pygame.Rect(VIRTUAL_W - 100, 10, 90, 40)
         pygame.draw.rect(surface, (20, 40, 20), m_bg, border_radius=20)
         pygame.draw.rect(surface, (50, 200, 50), m_bg, 2, border_radius=20)
-        
         m_txt = self.font_score.render(f"${game.credits}", True, (100, 255, 100))
         surface.blit(m_txt, m_txt.get_rect(center=m_bg.center))
 
@@ -241,19 +339,15 @@ class UIManager:
         surface.blit(st, st.get_rect(center=(cx, cy - 40)))
         surface.blit(hs, hs.get_rect(center=(cx, cy + 140)))
         
-        # Butonlar
         btns = [("PLAY", 0), ("SETTINGS", 60), ("EXIT", 120)]
-        self.menu_buttons = [] # Tıklama kontrolü için sakla
-        
+        self.menu_buttons = [] 
         base_y = cy 
         for text, offset in btns:
             rect = pygame.Rect(0, 0, 200, 50)
             rect.center = (cx, base_y + offset)
-            
             col = ACCENT_COLOR if text == "PLAY" else (60, 60, 70)
             if rect.collidepoint(pygame.mouse.get_pos()):
                 col = (min(255, col[0]+30), min(255, col[1]+30), min(255, col[2]+30))
-            
             pygame.draw.rect(surface, col, rect, border_radius=8)
             txt = self.font_bold.render(text, True, (0,0,0) if text == "PLAY" else (200,200,200))
             surface.blit(txt, txt.get_rect(center=rect.center))
@@ -263,41 +357,28 @@ class UIManager:
         o = pygame.Surface((VIRTUAL_W, VIRTUAL_H), pygame.SRCALPHA)
         o.fill((0,0,0,200))
         surface.blit(o, (0,0))
-        
         cx, cy = VIRTUAL_W//2, VIRTUAL_H//2
-        
-        # Kutu
         box = pygame.Rect(0, 0, 400, 250)
         box.center = (cx, cy)
         pygame.draw.rect(surface, (30, 30, 40), box, border_radius=15)
         pygame.draw.rect(surface, (100, 100, 100), box, 2, border_radius=15)
-        
         q = self.font_bold.render("Return to Main Menu?", True, (255, 255, 255))
         surface.blit(q, q.get_rect(center=(cx, cy - 40)))
-        
-        # Evet / Hayır
         yes_btn = pygame.Rect(0, 0, 100, 40)
         yes_btn.center = (cx - 70, cy + 40)
         no_btn = pygame.Rect(0, 0, 100, 40)
         no_btn.center = (cx + 70, cy + 40)
-        
         mx, my = pygame.mouse.get_pos()
-        
-        # Yes
         c_yes = (200, 50, 50)
         if yes_btn.collidepoint(mx, my): c_yes = (255, 80, 80)
         pygame.draw.rect(surface, c_yes, yes_btn, border_radius=5)
         yt = self.font_bold.render("YES", True, (255,255,255))
         surface.blit(yt, yt.get_rect(center=yes_btn.center))
-        
-        # No
         c_no = (50, 150, 50)
         if no_btn.collidepoint(mx, my): c_no = (80, 200, 80)
         pygame.draw.rect(surface, c_no, no_btn, border_radius=5)
         nt = self.font_bold.render("NO", True, (255,255,255))
         surface.blit(nt, nt.get_rect(center=no_btn.center))
-        
-        # Tıklama için sakla
         self.pause_buttons = {'YES': yes_btn, 'NO': no_btn}
 
     def draw_shop(self, surface, game):
@@ -328,7 +409,7 @@ class UIManager:
         surface.blit(o, (0,0))
         t = self.title_font.render("GAME OVER", True, (255, 50, 50))
         s = self.font_big.render(f"Score: {score}", True, (255, 255, 255))
-        r = self.font_reg.render("Click to Return Menu", True, (150, 150, 150))
+        r = self.font_reg.render("Press R to Restart", True, (150, 150, 150))
         cx, cy = VIRTUAL_W//2, VIRTUAL_H//2
         surface.blit(t, t.get_rect(center=(cx, cy - 50)))
         surface.blit(s, s.get_rect(center=(cx, cy + 10)))

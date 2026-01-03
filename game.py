@@ -43,7 +43,7 @@ class Game:
         self.grid.rect.topleft = (grid_x, grid_y)
         
         self.trash_rect = pygame.Rect(self.w - 100, self.h - 60, 40, 50)
-        self.menu_btn_rect = pygame.Rect(0,0,0,0) # UI tarafından güncellenir
+        self.menu_btn_rect = pygame.Rect(0,0,0,0)
         
         self.state = STATE_MENU 
         self.init_game_session_data() 
@@ -84,17 +84,10 @@ class Game:
         self.start_round()
 
     def start_round(self):
-        # 1. Hedef Puan
         base_target = 300 * self.ante
         if self.round == 1: self.level_target = int(base_target * 1.0)
         elif self.round == 2: self.level_target = int(base_target * 1.5)
         elif self.round == 3: self.level_target = int(base_target * 2.5)
-        
-        # 2. Void Ammo Hesabı (İstenen Dinamik Artış)
-        # Formül: Baz + (Ante başına 2) + (Round başına 3)
-        # Örnek: Ante 1 -> 6 + 0 + 3(Small) = 9
-        #        Ante 1 -> 6 + 0 + 6(Big) = 12
-        #        Ante 1 -> 6 + 0 + 6(Boss) = 12 (Boss artmaz, sabit kalır)
         
         round_bonus = 0
         if self.round == 1: round_bonus = 3
@@ -198,13 +191,11 @@ class Game:
             # --- MENU BUTTONS ---
             if self.state == STATE_MENU:
                 if event.type == pygame.MOUSEBUTTONDOWN:
-                    # ui.py içinde self.ui.menu_buttons dolduruluyor
                     if hasattr(self.ui, 'menu_buttons'):
                         for rect, text in self.ui.menu_buttons:
                             if rect.collidepoint(mx, my):
                                 if text == "PLAY": self.start_new_game()
                                 elif text == "EXIT": sys.exit()
-                                # SETTINGS şimdilik boş
 
             # --- PAUSE CONFIRM ---
             elif self.state == STATE_PAUSE:
@@ -213,24 +204,22 @@ class Game:
                         yes = self.ui.pause_buttons['YES']
                         no = self.ui.pause_buttons['NO']
                         if yes.collidepoint(mx, my):
-                            self.state = STATE_MENU # Ana Menüye Dön
+                            self.state = STATE_MENU 
                             self.init_game_session_data()
                         elif no.collidepoint(mx, my):
-                            self.state = STATE_PLAYING # Devam et
+                            self.state = STATE_PLAYING 
 
             # --- OYUN İÇİ ---
             elif self.state == STATE_PLAYING:
-                # ESC veya MENU BUTONU -> PAUSE
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
                         self.state = STATE_PAUSE
                 
                 if event.type == pygame.MOUSEBUTTONDOWN:
-                    # Sol alttaki Menu butonu
                     if hasattr(self, 'menu_btn_rect') and self.menu_btn_rect.collidepoint(mx, my):
                         self.state = STATE_PAUSE
                     
-                    if event.button == 1:
+                    if event.button == 1: # Left Click
                         for b in self.blocks:
                             if b.rect.collidepoint(mx, my):
                                 self.held_block = b
@@ -239,8 +228,11 @@ class Game:
                                 self.held_block.offset_y = my - b.rect.y
                                 self.audio.play('place') 
                                 break
-                    elif event.button == 3 and self.held_block:
+                    elif event.button == 3 and self.held_block: # Right Click (Rotate)
                         self.held_block.rotate()
+                    
+                    elif event.button == 2 and self.held_block: # Middle Click (Flip)
+                        self.held_block.flip() # BLOK AYNALAMA BURADA
 
                 elif event.type == pygame.MOUSEBUTTONUP:
                     if event.button == 1 and self.held_block:
@@ -395,7 +387,7 @@ class Game:
             
             # OVERLAYS
             if self.state == STATE_SCORING:
-                self.ui.draw_sidebar(self.screen, self) # Paneli güncellemek için
+                self.ui.draw_sidebar(self.screen, self) 
                 
             elif self.state == STATE_SHOP:
                 self.ui.draw_shop(self.screen, self)
