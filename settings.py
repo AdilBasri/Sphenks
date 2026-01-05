@@ -7,10 +7,14 @@ VIRTUAL_H = 480
 FPS = 60
 TITLE = "SPHENKS: ROGUELIKE"
 
-# --- SIDEBAR & LAYOUT ---
-SIDEBAR_WIDTH = 240
+# --- SIDEBAR & LAYOUT (GÜNCELLENDİ) ---
+SIDEBAR_WIDTH = 190 # 240 -> 190 (Daha dar)
 PLAY_AREA_W = VIRTUAL_W - SIDEBAR_WIDTH
 PLAY_AREA_H = VIRTUAL_H
+
+# --- UI ELEMENTLERİ (YENİ) ---
+TOTEM_ICON_SIZE = 40 # Tepedeki jokerlerin boyutu
+HAND_BG_HEIGHT = 90  # Aşağıdaki blok rafının yüksekliği
 
 # --- GRID ---
 TILE_SIZE = 30 
@@ -55,7 +59,7 @@ BIG_FONT_SIZE = 40
 HYPE_WORDS = ["HARİKA!", "EFSANE!", "MÜKEMMEL!", "GÜÜÜMM!", "ŞOV YAPTIN!", "DURDURULAMAZ!", "İNANILMAZ!"]
 
 # --- OYUN AYARLARI ---
-STARTING_CREDITS = 2
+STARTING_CREDITS = 5
 DISCARD_COST = 1
 SCORE_PER_BLOCK = 5
 SCORE_PER_LINE = 50
@@ -123,13 +127,11 @@ GLYPHS = {
     'STONE_BREAKER': {'name': 'Drill', 'price': 3, 'desc': 'Crush Stones', 'color': (150, 150, 150)}
 }
 
-# RELIC (Hata almamak için)
 RELICS = {
     'golden_skull': {'name': 'Golden Skull', 'price': 50, 'desc': 'A shiny ancient skull.', 'type': 'treasure', 'value': 100},
     'dusty_map': {'name': 'Dusty Map', 'price': 10, 'desc': 'Reveals secrets.', 'type': 'passive', 'value': 0}
 }
 
-# --- BOSS BLINDS (Hata Çözümü) ---
 BOSS_DATA = {
     'The Wall': {'desc': 'Start with 3 Stones', 'color': (100, 100, 100)},
     'The Haze': {'desc': 'No Ghost Block', 'color': (150, 50, 150)},

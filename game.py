@@ -32,17 +32,18 @@ class Game:
         self.high_score = self.load_high_score()
         
         self.grid = Grid()
+        # Izgara konumu (Eski haliyle kalsın, UI'dan bağımsız ortalayalım)
         play_area_center_x = SIDEBAR_WIDTH + (PLAY_AREA_W // 2)
         play_area_center_y = VIRTUAL_H // 2
         
         grid_x = play_area_center_x - (GRID_WIDTH // 2)
-        grid_y = play_area_center_y - (GRID_HEIGHT // 2)
+        grid_y = play_area_center_y - (GRID_HEIGHT // 2) - 20 
         
         self.grid_offset_x = grid_x
         self.grid_offset_y = grid_y
         self.grid.rect.topleft = (grid_x, grid_y)
         
-        self.trash_rect = pygame.Rect(self.w - 100, self.h - 60, 40, 50)
+        self.trash_rect = pygame.Rect(self.w - 80, self.h - 80, 40, 50)
         self.menu_btn_rect = pygame.Rect(0,0,0,0)
         
         self.state = STATE_MENU 
@@ -51,38 +52,33 @@ class Game:
     def load_high_score(self):
         if os.path.exists("highscore.txt"):
             try:
-                with open("highscore.txt", "r") as f: return int(f.read())
-            except: return 0
+                with open("highscore.txt", "r") as f:
+                    return int(f.read())
+            except:
+                return 0
         return 0
-    
     def save_high_score(self):
-        with open("highscore.txt", "w") as f: f.write(str(self.high_score))
-
-    def get_current_theme(self):
-        return THEMES['NEON']
+        with open("highscore.txt", "w") as f:
+            f.write(str(self.high_score))
+    def get_current_theme(self): return THEMES['NEON']
 
     def init_game_session_data(self):
-        """Verileri sıfırlar ve BAŞLANGIÇ DEĞİŞKENLERİNİ tanımlar"""
         self.credits = STARTING_CREDITS
         self.totems = [] 
         self.score = 0
         self.visual_score = 0
         self.ante = 1
         self.round = 1 
-        
         self.screen_shake = 0
         self.combo_counter = 0
         self.scoring_data = {'base': 0, 'mult': 0, 'total': 0}
-        
-        # --- KRİTİK CRASH DÜZELTMESİ ---
-        # Bu değişkenlerin burada tanımlı olması şart!
         self.current_boss = None 
         self.active_boss_effect = None 
-        
         self.grid.reset()
         self.blocks = []
         self.held_block = None
         self.void_count = BASE_VOID_COUNT
+        self.is_edge_placement = False
 
     def start_new_game(self):
         self.audio.play('select')
@@ -117,7 +113,6 @@ class Game:
         self.blocks = []
         self.held_block = None
         
-        # Boss Etkisi: Duvar
         if self.active_boss_effect == 'The Wall':
             self.grid.place_stones(3)
             self.particle_system.create_text(self.w//2, self.h//2, "BOSS: THE WALL", (150, 150, 150))
@@ -143,25 +138,17 @@ class Game:
 
         weights = {k: 10 for k in keys}
         if empty_cells < (GRID_SIZE * GRID_SIZE * 0.3):
-            weights['DOT'] += 30
-            weights['I'] += 10
-            weights['O'] -= 5
-            weights['J'] -= 5
-            weights['L'] -= 5
-            
-        if single_holes > 0:
-            weights['DOT'] += 50 * single_holes
-            
+            weights['DOT'] += 30; weights['I'] += 10; weights['O'] -= 5; weights['J'] -= 5; weights['L'] -= 5
+        if single_holes > 0: weights['DOT'] += 50 * single_holes
+        
         population = list(weights.keys())
         w_list = [max(1, weights[k]) for k in population]
         return random.choices(population, weights=w_list, k=1)[0]
 
     def refill_hand(self):
         if not self.blocks and self.void_count > 0:
-            # Boss Etkisi: El Küçültme
             max_hand = 3
-            if self.active_boss_effect == 'The Shrink':
-                max_hand = 2
+            if self.active_boss_effect == 'The Shrink': max_hand = 2
             
             count = min(max_hand, self.void_count)
             for _ in range(count):
@@ -195,15 +182,16 @@ class Game:
 
     def position_blocks_in_hand(self):
         area_center_x = SIDEBAR_WIDTH + (PLAY_AREA_W // 2)
-        total_width = PLAY_AREA_W * 0.7
+        total_width = PLAY_AREA_W * 0.6
         start_x = area_center_x - (total_width // 2)
         gap = total_width // 3
-        y_pos = int(self.h * 0.85)
+        bg_y = VIRTUAL_H - HAND_BG_HEIGHT
+        center_y = bg_y + (HAND_BG_HEIGHT // 2)
         
         for i, b in enumerate(self.blocks):
             if b != self.held_block:
                 target_x = start_x + (i * gap) + (gap - b.width)//2
-                target_y = y_pos
+                target_y = center_y - (b.height // 2)
                 b.rect.x = target_x
                 b.rect.y = target_y
                 b.original_pos = (target_x, target_y)
@@ -222,12 +210,19 @@ class Game:
         for t in self.totems:
             if t.trigger_type == 'on_score':
                 mult, _ = TotemLogic.apply_on_score(t.key, mult, 0, self)
+                if t.key == 'blood_pact' and self.void_count > 0:
+                    self.void_count -= 1
         return mult
 
     def generate_shop(self):
         self.shop_totems = []
         keys = list(TOTEM_DATA.keys())
-        for _ in range(3): self.shop_totems.append(Totem(random.choice(keys), TOTEM_DATA[random.choice(keys)]))
+        
+        # --- HATA DÜZELTME: ARTIK EŞLEŞİYOR ---
+        for _ in range(3):
+            k = random.choice(keys) # Anahtarı BİR KERE seç
+            self.shop_totems.append(Totem(k, TOTEM_DATA[k])) # Aynı anahtarı kullan
+            
         self.state = STATE_SHOP
 
     def buy_totem(self, t):
@@ -241,7 +236,6 @@ class Game:
         mx, my = pygame.mouse.get_pos()
         for event in pygame.event.get():
             if event.type == pygame.QUIT: sys.exit()
-            
             if self.state == STATE_SCORING: return 
 
             if self.state == STATE_MENU:
@@ -258,36 +252,29 @@ class Game:
                         yes = self.ui.pause_buttons['YES']
                         no = self.ui.pause_buttons['NO']
                         if yes.collidepoint(mx, my):
-                            self.state = STATE_MENU 
-                            self.init_game_session_data()
-                        elif no.collidepoint(mx, my):
-                            self.state = STATE_PLAYING 
+                            self.state = STATE_MENU; self.init_game_session_data()
+                        elif no.collidepoint(mx, my): self.state = STATE_PLAYING 
 
             elif self.state == STATE_PLAYING:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE: self.state = STATE_PAUSE
-                
                 if event.type == pygame.MOUSEBUTTONDOWN:
-                    if hasattr(self, 'menu_btn_rect') and self.menu_btn_rect.collidepoint(mx, my):
-                        self.state = STATE_PAUSE
-                    
+                    if hasattr(self, 'menu_btn_rect') and self.menu_btn_rect.collidepoint(mx, my): self.state = STATE_PAUSE
                     if event.button == 1: 
                         for b in self.blocks:
                             if b.rect.collidepoint(mx, my):
-                                self.held_block = b
-                                self.held_block.dragging = True
+                                self.held_block = b; self.held_block.dragging = True
                                 self.held_block.offset_x = mx - b.rect.x 
                                 self.held_block.offset_y = my - b.rect.y
-                                self.audio.play('place') 
-                                break
+                                self.audio.play('place'); break
                     elif event.button == 3 and self.held_block: self.held_block.rotate()
                     elif event.button == 2 and self.held_block: self.held_block.flip()
 
                 elif event.type == pygame.MOUSEBUTTONUP:
                     if event.button == 1 and self.held_block:
                         if self.trash_rect.collidepoint(mx, my):
-                            # Boss Etkisi: The Drain
                             current_cost = DISCARD_COST
+                            if any(t.key == 'recycler' for t in self.totems): current_cost = 0
                             if self.active_boss_effect == 'The Drain': current_cost = 3
                             
                             if self.credits >= current_cost:
@@ -303,9 +290,7 @@ class Game:
                             else:
                                 self.audio.play('hit')
                                 self.held_block.rect.topleft = self.held_block.original_pos
-                                
-                            self.held_block = None
-                            return
+                            self.held_block = None; return
 
                         cur_x = mx - self.held_block.offset_x
                         cur_y = my - self.held_block.offset_y
@@ -317,17 +302,29 @@ class Game:
                             target_px = self.grid_offset_x + gc * TILE_SIZE
                             target_py = self.grid_offset_y + gr * TILE_SIZE
                             self.held_block.rect.topleft = (target_px, target_py)
-                            
                             if self.grid.is_valid_position(self.held_block, gr, gc):
                                 self.grid.place_block(self.held_block, gr, gc)
                                 self.last_grid_pos = (gr, gc)
-                                self.audio.play('place')
+                                self.is_edge_placement = False
+                                for r in range(self.held_block.rows):
+                                    for c in range(self.held_block.cols):
+                                        if self.held_block.matrix[r][c] == 1:
+                                            abs_r = gr + r
+                                            abs_c = gc + c
+                                            if abs_r == 0 or abs_r == GRID_SIZE-1 or abs_c == 0 or abs_c == GRID_SIZE-1:
+                                                self.is_edge_placement = True
                                 
+                                self.audio.play('place')
                                 cells = sum(r.count(1) for r in self.held_block.matrix)
                                 base_points = cells * SCORE_PER_BLOCK
                                 
+                                stones_before = sum(row.count(STONE_COLOR) for row in self.grid.grid if row)
                                 cr, cc = self.grid.check_clears()
+                                stones_after = sum(row.count(STONE_COLOR) for row in self.grid.grid if row)
+                                stones_destroyed = stones_before - stones_after
+                                
                                 total_clears = len(cr) + len(cc)
+                                cleared_cells_count = total_clears * GRID_SIZE
                                 
                                 if total_clears > 0:
                                     base_points += total_clears * SCORE_PER_LINE
@@ -339,46 +336,46 @@ class Game:
                                     theme = self.get_current_theme()
                                     for r in cr:
                                         py = self.grid_offset_y + r*TILE_SIZE + TILE_SIZE//2
-                                        for c in range(GRID_SIZE):
-                                            self.particle_system.create_explosion(self.grid_offset_x + c*TILE_SIZE, py, count=5)
+                                        for c in range(GRID_SIZE): self.particle_system.create_explosion(self.grid_offset_x + c*TILE_SIZE, py, count=5)
                                     for c in cc:
                                         px = self.grid_offset_x + c*TILE_SIZE + TILE_SIZE//2
-                                        for r in range(GRID_SIZE):
-                                            self.particle_system.create_explosion(px, self.grid_offset_y + r*TILE_SIZE, count=5)
+                                        for r in range(GRID_SIZE): self.particle_system.create_explosion(px, self.grid_offset_y + r*TILE_SIZE, count=5)
+                                    
+                                    extra_cash = 0
+                                    for t in self.totems:
+                                        if t.trigger_type == 'on_clear':
+                                            gain = TotemLogic.apply_on_clear(t.key, self, cleared_cells_count, stones_destroyed)
+                                            extra_cash += gain
+                                    if extra_cash > 0:
+                                        self.credits += int(extra_cash)
+                                        self.particle_system.create_text(self.w-100, 100, f"+${extra_cash}", (100, 255, 100))
 
                                     mult = self.calculate_totem_mult()
-                                    
                                     hype_word = random.choice(HYPE_WORDS)
                                     self.particle_system.create_text(self.w//2, self.h//2 - 50, hype_word, (255, 215, 0))
-
                                     self.blocks.remove(self.held_block)
                                     self.held_block = None
-                                    
                                     self.state = STATE_SCORING
                                     self.scoring_timer = 0
-                                    self.scoring_data = {
-                                        'base': base_points,
-                                        'mult': mult,
-                                        'total': int(base_points * mult)
-                                    }
+                                    self.scoring_data = {'base': base_points, 'mult': mult, 'total': int(base_points * mult)}
                                     return
-
                                 else:
-                                    self.score += base_points
+                                    arch_bonus = 0
+                                    for t in self.totems:
+                                        if t.key == 'architect':
+                                            arch_bonus += 50
+                                            self.particle_system.create_text(target_px, target_py, "+50 Arch", (100, 100, 255))
+                                    self.score += base_points + arch_bonus
                                     self.combo_counter = 0
                                     self.scoring_data = {'base': 0, 'mult': 0, 'total': 0}
-
+                                
                                 self.blocks.remove(self.held_block)
                                 if self.state != STATE_SCORING: self.refill_hand()
                             else:
                                 self.audio.play('hit')
                                 self.held_block.rect.topleft = self.held_block.original_pos
-                        else:
-                             self.held_block.rect.topleft = self.held_block.original_pos
-                        
-                        self.held_block.dragging = False
-                        self.held_block = None
-
+                        else: self.held_block.rect.topleft = self.held_block.original_pos
+                        self.held_block.dragging = False; self.held_block = None
                 elif event.type == pygame.MOUSEMOTION:
                     if self.held_block and self.held_block.dragging:
                         self.held_block.rect.x = mx - self.held_block.offset_x
@@ -391,50 +388,41 @@ class Game:
                     if mx > self.w - 150 and my > self.h - 50: self.next_level()
 
             elif self.state == STATE_GAME_OVER:
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    self.state = STATE_MENU
-                    self.init_game_session_data()
+                if event.type == pygame.MOUSEBUTTONDOWN: self.state = STATE_MENU; self.init_game_session_data()
 
     def update(self):
         self.ui.update()
         self.particle_system.update()
         if self.screen_shake > 0: self.screen_shake -= 1
-        
         diff = self.score - self.visual_score
         if diff > 0: self.visual_score += max(1, diff // 5)
-        
         if self.state == STATE_PLAYING:
             for b in self.blocks: b.update()
-            
         elif self.state == STATE_SCORING:
             self.scoring_timer += 1
             if self.scoring_timer > 60:
                 self.score += self.scoring_data['total']
                 self.state = STATE_PLAYING
                 self.refill_hand()
-                if self.score >= self.level_target and not self.blocks and self.void_count == 0:
-                     self.check_round_end()
+                if self.score >= self.level_target and not self.blocks and self.void_count == 0: self.check_round_end()
 
     def draw(self):
         self.ui.draw_bg(self.screen)
-        
         if self.state == STATE_MENU:
             self.ui.draw_menu(self.screen, self.high_score)
         else:
             self.ui.draw_sidebar(self.screen, self)
+            self.ui.draw_hand_bg(self.screen)
+            self.ui.draw_top_bar(self.screen, self)
             theme = self.get_current_theme()
             off_x = random.randint(-self.screen_shake, self.screen_shake) if self.screen_shake > 0 else 0
             self.grid.draw(self.screen, off_x, 0, theme)
-            
-            # Boss Etkisi: The Haze (Ghost Yok)
             if self.active_boss_effect != 'The Haze': 
                 if self.held_block and self.held_block.dragging:
                     cur_x = pygame.mouse.get_pos()[0] - self.held_block.offset_x
                     cur_y = pygame.mouse.get_pos()[1] - self.held_block.offset_y
-                    check_x = cur_x + (TILE_SIZE / 2)
-                    check_y = cur_y + (TILE_SIZE / 2)
+                    check_x = cur_x + (TILE_SIZE / 2); check_y = cur_y + (TILE_SIZE / 2)
                     gr, gc = self.get_grid_pos(check_x, check_y)
-                    
                     if gr is not None and gc is not None:
                         target_px = self.grid_offset_x + gc * TILE_SIZE
                         target_py = self.grid_offset_y + gr * TILE_SIZE
@@ -443,27 +431,17 @@ class Game:
                         if self.grid.is_valid_position(self.held_block, gr, gc):
                             self.held_block.draw(self.screen, target_px, target_py, 1.0, 60, theme['style'])
                         self.held_block.rect.topleft = orig
-
             for b in self.blocks:
                 if b != self.held_block: b.draw(self.screen, 0, 0, 0.8, 255, theme['style'])
             if self.held_block: self.held_block.draw(self.screen, 0, 0, 1.0, 255, theme['style'])
-            
             self.particle_system.draw(self.screen)
             self.ui.draw_hud_elements(self.screen, self)
-            
-            if self.state == STATE_SHOP:
-                self.ui.draw_shop(self.screen, self)
-            elif self.state == STATE_PAUSE:
-                self.ui.draw_pause_overlay(self.screen)
-            elif self.state == STATE_GAME_OVER:
-                self.ui.draw_game_over(self.screen, self.score)
-
+            if self.state == STATE_SHOP: self.ui.draw_shop(self.screen, self)
+            elif self.state == STATE_PAUSE: self.ui.draw_pause_overlay(self.screen)
+            elif self.state == STATE_GAME_OVER: self.ui.draw_game_over(self.screen, self.score)
         self.crt.draw(self.screen)
         pygame.display.flip()
 
     def run(self):
         while True:
-            self.handle_events()
-            self.update()
-            self.draw()
-            self.clock.tick(FPS)
+            self.handle_events(); self.update(); self.draw(); self.clock.tick(FPS)
