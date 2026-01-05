@@ -62,6 +62,7 @@ class Game:
         return THEMES['NEON']
 
     def init_game_session_data(self):
+        """Verileri sıfırlar ve BAŞLANGIÇ DEĞİŞKENLERİNİ tanımlar"""
         self.credits = STARTING_CREDITS
         self.totems = [] 
         self.score = 0
@@ -72,6 +73,11 @@ class Game:
         self.screen_shake = 0
         self.combo_counter = 0
         self.scoring_data = {'base': 0, 'mult': 0, 'total': 0}
+        
+        # --- KRİTİK CRASH DÜZELTMESİ ---
+        # Bu değişkenlerin burada tanımlı olması şart!
+        self.current_boss = None 
+        self.active_boss_effect = None 
         
         self.grid.reset()
         self.blocks = []
@@ -84,6 +90,13 @@ class Game:
         self.start_round()
 
     def start_round(self):
+        self.active_boss_effect = None
+        if self.round == 3:
+            self.current_boss = random.choice(list(BOSS_DATA.keys()))
+            self.active_boss_effect = self.current_boss
+        else:
+            self.current_boss = None
+
         base_target = 300 * self.ante
         if self.round == 1: self.level_target = int(base_target * 1.0)
         elif self.round == 2: self.level_target = int(base_target * 1.5)
@@ -92,7 +105,6 @@ class Game:
         round_bonus = 0
         if self.round == 1: round_bonus = 3
         elif self.round >= 2: round_bonus = 6
-        
         self.void_count = BASE_VOID_COUNT + ((self.ante - 1) * 2) + round_bonus
         
         self.score = 0 
@@ -104,15 +116,57 @@ class Game:
         self.grid.reset()
         self.blocks = []
         self.held_block = None
+        
+        # Boss Etkisi: Duvar
+        if self.active_boss_effect == 'The Wall':
+            self.grid.place_stones(3)
+            self.particle_system.create_text(self.w//2, self.h//2, "BOSS: THE WALL", (150, 150, 150))
+
         self.refill_hand()
         self.state = STATE_PLAYING
 
+    def get_smart_block_key(self):
+        keys = list(SHAPES.keys())
+        empty_cells = 0
+        single_holes = 0
+        
+        for r in range(GRID_SIZE):
+            for c in range(GRID_SIZE):
+                if self.grid.grid[r][c] is None:
+                    empty_cells += 1
+                    neighbors = 0
+                    if r > 0 and self.grid.grid[r-1][c]: neighbors += 1
+                    if r < GRID_SIZE-1 and self.grid.grid[r+1][c]: neighbors += 1
+                    if c > 0 and self.grid.grid[r][c-1]: neighbors += 1
+                    if c < GRID_SIZE-1 and self.grid.grid[r][c+1]: neighbors += 1
+                    if neighbors >= 3: single_holes += 1
+
+        weights = {k: 10 for k in keys}
+        if empty_cells < (GRID_SIZE * GRID_SIZE * 0.3):
+            weights['DOT'] += 30
+            weights['I'] += 10
+            weights['O'] -= 5
+            weights['J'] -= 5
+            weights['L'] -= 5
+            
+        if single_holes > 0:
+            weights['DOT'] += 50 * single_holes
+            
+        population = list(weights.keys())
+        w_list = [max(1, weights[k]) for k in population]
+        return random.choices(population, weights=w_list, k=1)[0]
+
     def refill_hand(self):
         if not self.blocks and self.void_count > 0:
-            count = min(3, self.void_count)
-            keys = list(SHAPES.keys())
+            # Boss Etkisi: El Küçültme
+            max_hand = 3
+            if self.active_boss_effect == 'The Shrink':
+                max_hand = 2
+            
+            count = min(max_hand, self.void_count)
             for _ in range(count):
-                self.blocks.append(Block(random.choice(keys)))
+                shape = self.get_smart_block_key()
+                self.blocks.append(Block(shape))
                 self.void_count -= 1
             self.position_blocks_in_hand()
             
@@ -188,7 +242,8 @@ class Game:
         for event in pygame.event.get():
             if event.type == pygame.QUIT: sys.exit()
             
-            # --- MENU BUTTONS ---
+            if self.state == STATE_SCORING: return 
+
             if self.state == STATE_MENU:
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     if hasattr(self.ui, 'menu_buttons'):
@@ -197,7 +252,6 @@ class Game:
                                 if text == "PLAY": self.start_new_game()
                                 elif text == "EXIT": sys.exit()
 
-            # --- PAUSE CONFIRM ---
             elif self.state == STATE_PAUSE:
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     if hasattr(self.ui, 'pause_buttons'):
@@ -209,17 +263,15 @@ class Game:
                         elif no.collidepoint(mx, my):
                             self.state = STATE_PLAYING 
 
-            # --- OYUN İÇİ ---
             elif self.state == STATE_PLAYING:
                 if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_ESCAPE:
-                        self.state = STATE_PAUSE
+                    if event.key == pygame.K_ESCAPE: self.state = STATE_PAUSE
                 
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     if hasattr(self, 'menu_btn_rect') and self.menu_btn_rect.collidepoint(mx, my):
                         self.state = STATE_PAUSE
                     
-                    if event.button == 1: # Left Click
+                    if event.button == 1: 
                         for b in self.blocks:
                             if b.rect.collidepoint(mx, my):
                                 self.held_block = b
@@ -228,20 +280,30 @@ class Game:
                                 self.held_block.offset_y = my - b.rect.y
                                 self.audio.play('place') 
                                 break
-                    elif event.button == 3 and self.held_block: # Right Click (Rotate)
-                        self.held_block.rotate()
-                    
-                    elif event.button == 2 and self.held_block: # Middle Click (Flip)
-                        self.held_block.flip() # BLOK AYNALAMA BURADA
+                    elif event.button == 3 and self.held_block: self.held_block.rotate()
+                    elif event.button == 2 and self.held_block: self.held_block.flip()
 
                 elif event.type == pygame.MOUSEBUTTONUP:
                     if event.button == 1 and self.held_block:
                         if self.trash_rect.collidepoint(mx, my):
-                            if self.credits >= DISCARD_COST:
-                                self.credits -= DISCARD_COST
-                                self.blocks.remove(self.held_block)
-                                self.refill_hand()
-                                self.combo_counter = 0
+                            # Boss Etkisi: The Drain
+                            current_cost = DISCARD_COST
+                            if self.active_boss_effect == 'The Drain': current_cost = 3
+                            
+                            if self.credits >= current_cost:
+                                self.credits -= current_cost
+                                try:
+                                    self.blocks.remove(self.held_block)
+                                    new_shape = self.get_smart_block_key()
+                                    self.blocks.append(Block(new_shape))
+                                    self.position_blocks_in_hand()
+                                    self.combo_counter = 0
+                                    self.particle_system.create_text(mx, my, "REROLL!", (200, 200, 200))
+                                except: pass
+                            else:
+                                self.audio.play('hit')
+                                self.held_block.rect.topleft = self.held_block.original_pos
+                                
                             self.held_block = None
                             return
 
@@ -278,13 +340,17 @@ class Game:
                                     for r in cr:
                                         py = self.grid_offset_y + r*TILE_SIZE + TILE_SIZE//2
                                         for c in range(GRID_SIZE):
-                                            self.particle_system.create_explosion(self.grid_offset_x + c*TILE_SIZE, py, (255,255,200))
+                                            self.particle_system.create_explosion(self.grid_offset_x + c*TILE_SIZE, py, count=5)
                                     for c in cc:
                                         px = self.grid_offset_x + c*TILE_SIZE + TILE_SIZE//2
                                         for r in range(GRID_SIZE):
-                                            self.particle_system.create_explosion(px, self.grid_offset_y + r*TILE_SIZE, (200,255,255))
+                                            self.particle_system.create_explosion(px, self.grid_offset_y + r*TILE_SIZE, count=5)
 
                                     mult = self.calculate_totem_mult()
+                                    
+                                    hype_word = random.choice(HYPE_WORDS)
+                                    self.particle_system.create_text(self.w//2, self.h//2 - 50, hype_word, (255, 215, 0))
+
                                     self.blocks.remove(self.held_block)
                                     self.held_block = None
                                     
@@ -360,24 +426,24 @@ class Game:
             off_x = random.randint(-self.screen_shake, self.screen_shake) if self.screen_shake > 0 else 0
             self.grid.draw(self.screen, off_x, 0, theme)
             
-            # Ghost
-            if self.held_block and self.held_block.dragging:
-                cur_x = pygame.mouse.get_pos()[0] - self.held_block.offset_x
-                cur_y = pygame.mouse.get_pos()[1] - self.held_block.offset_y
-                check_x = cur_x + (TILE_SIZE / 2)
-                check_y = cur_y + (TILE_SIZE / 2)
-                gr, gc = self.get_grid_pos(check_x, check_y)
-                
-                if gr is not None and gc is not None:
-                    target_px = self.grid_offset_x + gc * TILE_SIZE
-                    target_py = self.grid_offset_y + gr * TILE_SIZE
-                    orig = self.held_block.rect.topleft
-                    self.held_block.rect.topleft = (target_px, target_py)
-                    if self.grid.is_valid_position(self.held_block, gr, gc):
-                        self.held_block.draw(self.screen, target_px, target_py, 1.0, 60, theme['style'])
-                    self.held_block.rect.topleft = orig
+            # Boss Etkisi: The Haze (Ghost Yok)
+            if self.active_boss_effect != 'The Haze': 
+                if self.held_block and self.held_block.dragging:
+                    cur_x = pygame.mouse.get_pos()[0] - self.held_block.offset_x
+                    cur_y = pygame.mouse.get_pos()[1] - self.held_block.offset_y
+                    check_x = cur_x + (TILE_SIZE / 2)
+                    check_y = cur_y + (TILE_SIZE / 2)
+                    gr, gc = self.get_grid_pos(check_x, check_y)
+                    
+                    if gr is not None and gc is not None:
+                        target_px = self.grid_offset_x + gc * TILE_SIZE
+                        target_py = self.grid_offset_y + gr * TILE_SIZE
+                        orig = self.held_block.rect.topleft
+                        self.held_block.rect.topleft = (target_px, target_py)
+                        if self.grid.is_valid_position(self.held_block, gr, gc):
+                            self.held_block.draw(self.screen, target_px, target_py, 1.0, 60, theme['style'])
+                        self.held_block.rect.topleft = orig
 
-            # Blocks
             for b in self.blocks:
                 if b != self.held_block: b.draw(self.screen, 0, 0, 0.8, 255, theme['style'])
             if self.held_block: self.held_block.draw(self.screen, 0, 0, 1.0, 255, theme['style'])
@@ -385,16 +451,10 @@ class Game:
             self.particle_system.draw(self.screen)
             self.ui.draw_hud_elements(self.screen, self)
             
-            # OVERLAYS
-            if self.state == STATE_SCORING:
-                self.ui.draw_sidebar(self.screen, self) 
-                
-            elif self.state == STATE_SHOP:
+            if self.state == STATE_SHOP:
                 self.ui.draw_shop(self.screen, self)
-                
             elif self.state == STATE_PAUSE:
                 self.ui.draw_pause_overlay(self.screen)
-                
             elif self.state == STATE_GAME_OVER:
                 self.ui.draw_game_over(self.screen, self.score)
 

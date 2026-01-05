@@ -29,6 +29,12 @@ CHIPS_COLOR = (0, 150, 255) # Mavi
 MULT_COLOR = (255, 50, 50)  # Kırmızı
 TOTAL_COLOR = (255, 200, 50) # Altın
 
+# Konfeti Renkleri
+CONFETTI_COLORS = [
+    (255, 0, 85), (0, 255, 255), (255, 255, 0), 
+    (170, 0, 255), (0, 255, 100), (255, 150, 0)
+]
+
 # Oyun İçi Renkler
 GRID_BG_COLOR = (30, 25, 40)     
 GRID_LINE_COLOR = (60, 50, 80)   
@@ -44,6 +50,9 @@ FONT_NAME = 'Arial'
 UI_FONT_SIZE = 16    
 SCORE_FONT_SIZE = 24
 BIG_FONT_SIZE = 40
+
+# --- HYPE KELİMELERİ ---
+HYPE_WORDS = ["HARİKA!", "EFSANE!", "MÜKEMMEL!", "GÜÜÜMM!", "ŞOV YAPTIN!", "DURDURULAMAZ!", "İNANILMAZ!"]
 
 # --- OYUN AYARLARI ---
 STARTING_CREDITS = 2
@@ -74,7 +83,7 @@ STATE_SCORING = 'scoring'
 STATE_SHOP = 'shop'
 STATE_LEVEL_COMPLETE = 'level_complete'
 STATE_GAME_OVER = 'game_over'
-STATE_PAUSE = 'pause' # YENİ: Duraklatma ve Çıkış Sorgusu
+STATE_PAUSE = 'pause'
 
 # --- BLOKLAR ---
 SHAPES = {
@@ -114,7 +123,16 @@ GLYPHS = {
     'STONE_BREAKER': {'name': 'Drill', 'price': 3, 'desc': 'Crush Stones', 'color': (150, 150, 150)}
 }
 
+# RELIC (Hata almamak için)
 RELICS = {
     'golden_skull': {'name': 'Golden Skull', 'price': 50, 'desc': 'A shiny ancient skull.', 'type': 'treasure', 'value': 100},
     'dusty_map': {'name': 'Dusty Map', 'price': 10, 'desc': 'Reveals secrets.', 'type': 'passive', 'value': 0}
+}
+
+# --- BOSS BLINDS (Hata Çözümü) ---
+BOSS_DATA = {
+    'The Wall': {'desc': 'Start with 3 Stones', 'color': (100, 100, 100)},
+    'The Haze': {'desc': 'No Ghost Block', 'color': (150, 50, 150)},
+    'The Drain': {'desc': 'Discard costs $3', 'color': (50, 150, 50)},
+    'The Shrink': {'desc': 'Hand Size -1', 'color': (200, 100, 50)}
 }
