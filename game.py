@@ -123,6 +123,8 @@ class Game:
             self.grid.place_stones(3)
             self.particle_system.create_text(self.w//2, self.h//2, "BOSS: THE WALL", (150, 150, 150))
             self.particle_system.atmosphere.trigger_shake(10, 4) 
+            # Girişte çok kısa bir glitch
+            self.crt.trigger_aberration(amount=2, duration=10)
 
         self.refill_hand()
         self.state = STATE_PLAYING
@@ -175,6 +177,8 @@ class Game:
         else:
             self.audio.play('gameover')
             self.state = STATE_GAME_OVER
+            # Game Over'da orta seviye glitch
+            self.crt.trigger_aberration(amount=3, duration=20)
             if self.score > self.high_score:
                 self.high_score = self.score
                 self.save_high_score()
@@ -338,9 +342,11 @@ class Game:
                                 cleared_cells_count = total_clears * GRID_SIZE
                                 
                                 if total_clears > 0:
-                                    # --- PARLAMA EFEKTİ SADECE BURADA ---
+                                    # GÖRSEL ŞOV (Sakinleştirilmiş)
                                     self.grid.trigger_beat() 
-                                    # ------------------------------------
+                                    
+                                    # Sadece 4-5 frame süren, çok hızlı ve hafif bir glitch
+                                    self.crt.trigger_aberration(amount=2, duration=5)
 
                                     base_points += total_clears * SCORE_PER_LINE
                                     self.credits += total_clears
@@ -414,7 +420,6 @@ class Game:
         if self.screen_shake > 0: self.screen_shake -= 1
         
         self.grid.update()
-        # --- BEAT TIMER SILINDI ---
         
         diff = self.score - self.visual_score
         if diff > 0: self.visual_score += max(1, diff // 5)
