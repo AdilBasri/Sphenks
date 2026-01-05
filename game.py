@@ -9,7 +9,6 @@ from grid import Grid
 from block import Block
 from effects import ParticleSystem, BossAtmosphere
 from totems import Totem, TotemLogic, TOTEM_DATA
-from glyphs import Glyph, GLYPHS
 from ui import UIManager       
 from audio import AudioManager 
 from crt import CRTManager 
@@ -85,6 +84,7 @@ class Game:
         self.held_block = None
         self.void_count = BASE_VOID_COUNT
         self.is_edge_placement = False
+        self.last_placed_block_tag = 'NONE'
 
     def start_new_game(self):
         self.audio.play('select')
@@ -123,7 +123,6 @@ class Game:
             self.grid.place_stones(3)
             self.particle_system.create_text(self.w//2, self.h//2, "BOSS: THE WALL", (150, 150, 150))
             self.particle_system.atmosphere.trigger_shake(10, 4) 
-            # Girişte çok kısa bir glitch
             self.crt.trigger_aberration(amount=2, duration=10)
 
         self.refill_hand()
@@ -172,12 +171,20 @@ class Game:
     def check_round_end(self):
         if self.score >= self.level_target:
             self.audio.play('select')
+            
+            # --- ROUND SONU FAİZ ---
+            for t in self.totems:
+                if t.trigger_type == 'on_round_end':
+                    money, desc = TotemLogic.apply_round_end(t.key, self)
+                    if money > 0:
+                        self.credits += money
+                        self.particle_system.create_text(self.w//2, self.h//2, desc, (100, 255, 100))
+            
             self.state = STATE_LEVEL_COMPLETE
             self.generate_shop()
         else:
             self.audio.play('gameover')
             self.state = STATE_GAME_OVER
-            # Game Over'da orta seviye glitch
             self.crt.trigger_aberration(amount=3, duration=20)
             if self.score > self.high_score:
                 self.high_score = self.score
@@ -239,6 +246,13 @@ class Game:
         if self.credits >= t.price and len(self.totems) < MAX_TOTEM_SLOTS:
             self.credits -= t.price
             self.totems.append(t)
+            
+            # Cashback
+            for owned in self.totems:
+                if owned.key == 'cashback':
+                    self.credits += 2
+                    self.particle_system.create_text(self.w//2, 100, "+$2 Cashback", (100, 255, 100))
+            
             if t in self.shop_totems: self.shop_totems.remove(t)
             self.audio.play('clear')
 
@@ -319,9 +333,30 @@ class Game:
                             self.held_block.rect.topleft = (target_px, target_py)
                             
                             if self.grid.is_valid_position(self.held_block, gr, gc):
+                                
+                                # --- KUMAR TOTEMİ ---
+                                gambling_triggered = False
+                                for t in self.totems:
+                                    if t.key == 'gamblers_dice':
+                                        triggered, bonus = TotemLogic.check_gambling(t.key, self)
+                                        if triggered:
+                                            self.particle_system.create_text(mx, my, "GAMBLE WIN! x5", (255, 215, 0))
+                                            self.score += int(bonus)
+                                            self.combo_counter += 1
+                                            self.audio.play('clear')
+                                            self.blocks.remove(self.held_block)
+                                            self.held_block = None
+                                            self.state = STATE_SCORING
+                                            self.scoring_data = {'base': 100, 'mult': 5.0, 'total': int(bonus)}
+                                            return 
+
                                 self.grid.place_block(self.held_block, gr, gc)
                                 self.last_grid_pos = (gr, gc)
+                                self.last_placed_block_tag = self.held_block.tag
                                 
+                                for t in self.totems:
+                                    TotemLogic.apply_on_place(t.key, self)
+
                                 self.is_edge_placement = False
                                 for r in range(self.held_block.rows):
                                     for c in range(self.held_block.cols):
@@ -342,10 +377,7 @@ class Game:
                                 cleared_cells_count = total_clears * GRID_SIZE
                                 
                                 if total_clears > 0:
-                                    # GÖRSEL ŞOV (Sakinleştirilmiş)
                                     self.grid.trigger_beat() 
-                                    
-                                    # Sadece 4-5 frame süren, çok hızlı ve hafif bir glitch
                                     self.crt.trigger_aberration(amount=2, duration=5)
 
                                     base_points += total_clears * SCORE_PER_LINE

@@ -94,10 +94,6 @@ class BossAtmosphere:
     def __init__(self, screen_width, screen_height):
         self.shake_timer = 0
         self.shake_magnitude = 0
-        self.screen_width = screen_width
-        self.screen_height = screen_height
-        
-        # Vignette (Kenar Karartma) Yüzeyi
         self.vignette_surface = pygame.Surface((screen_width, screen_height), pygame.SRCALPHA)
         self.create_vignette()
 

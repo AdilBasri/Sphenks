@@ -13,7 +13,18 @@ class Block:
         self.shape_key = shape_key
         self.matrix = SHAPES[shape_key]
         self.base_color = SHAPE_COLORS[shape_key]
-        self.color = self.base_color
+        
+        # TAG SİSTEMİ - Rastgele tag ataması
+        self.tag = self._assign_random_tag()
+        
+        # Tag'e göre renk belirleme
+        if self.tag != 'NONE' and BLOCK_TAG_COLORS.get(self.tag):
+            self.color = BLOCK_TAG_COLORS[self.tag]
+        else:
+            self.color = self.base_color
+        
+        # GOLD bloklarda pulse efekti için
+        self.glow_pulse = 0.0
         
         self.update_dimensions()
         
@@ -38,6 +49,12 @@ class Block:
         
         # Idle Animasyon (Rastgele başlangıç)
         self.idle_offset = random.uniform(0, 6.28) 
+    
+    def _assign_random_tag(self):
+        """Bloğa rastgele tag atar (ağırlıklı olasılık)"""
+        tags = list(BLOCK_TAG_WEIGHTS.keys())
+        weights = list(BLOCK_TAG_WEIGHTS.values())
+        return random.choices(tags, weights=weights, k=1)[0]
 
     def update_dimensions(self):
         self.rows = len(self.matrix)
@@ -116,6 +133,12 @@ class Block:
         final_tile_size = int(base_tile * current_scale)
         gap = int(final_tile_size * 0.1)
         block_size = final_tile_size - gap
+        
+        # GOLD bloklarda pulsating glow efekti
+        glow_intensity = 0
+        if self.tag == 'GOLD' and not is_ghost:
+            self.glow_pulse += 0.1
+            glow_intensity = int(20 + 15 * math.sin(self.glow_pulse))
 
         # Yüzey Oluştur
         surf_w = int(self.width * current_scale * 1.5) + 50
@@ -134,6 +157,12 @@ class Block:
                     bx = start_draw_x + (c_idx * final_tile_size) + (gap // 2)
                     by = start_draw_y + (r_idx * final_tile_size) + (gap // 2)
                     rect = pygame.Rect(bx, by, block_size, block_size)
+                    
+                    # GOLD blok için dış glow çiz
+                    if self.tag == 'GOLD' and glow_intensity > 0 and not is_ghost:
+                        glow_rect = rect.inflate(glow_intensity, glow_intensity)
+                        glow_color = (255, 215, 0, 50)  # Yarı saydam altın
+                        pygame.draw.rect(temp_surface, glow_color, glow_rect, border_radius=10)
 
                     if theme_type == 'glass':
                         c = self.color

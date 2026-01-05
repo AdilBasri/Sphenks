@@ -1,4 +1,5 @@
 # totems.py
+import random
 from settings import *
 
 class Totem:
@@ -7,7 +8,7 @@ class Totem:
         self.name = data['name']
         self.price = data['price']
         self.desc = data['desc'] # description yerine desc kullanıyoruz
-        self.trigger_type = data['trigger'] # 'on_score', 'on_clear', 'passive'
+        self.trigger_type = data['trigger'] # 'on_score', 'on_clear', 'passive', 'on_round_end', 'on_place'
         self.rarity = data['rarity']
         self.rect = None # UI için
 
@@ -23,19 +24,9 @@ class TotemLogic:
 
         # 1. SNIPER: Kenarlara temas eden blok varsa x2
         if key == 'sniper':
-            # Son koyulan bloğun koordinatlarına bak
-            if game_state.held_block: # Eğer o an bırakılan bloksa
-                # Bu kontrol biraz zor çünkü blok grid'e çoktan girdi.
-                # Grid üzerindeki son işlem yapılan yerlere bakabiliriz
-                # Basit çözüm: Eğer son yerleştirme kenara değdiyse (game.py'de flag tutabiliriz)
-                # Şimdilik grid boyutuna göre tahmini bir kontrol yerine
-                # game_state.last_grid_pos bilgisini kullanalım
-                r, c = game_state.last_grid_pos
-                # Bloğun boyutu da önemli ama basitçe başlangıç noktası kenar mı?
-                # Veya daha hassas: Bloğun herhangi bir parçası kenara değdi mi?
-                # Bunu game.py içinde hesaplayıp 'is_edge_placement' diye göndermek daha sağlıklı.
-                if getattr(game_state, 'is_edge_placement', False):
-                    new_mult += 1.0 # x2 olması için +1 ekliyoruz (Base 1.0 + 1.0 = 2.0)
+            # is_edge_placement flag'ini game.py içinde hesaplayıp 'is_edge_placement' diye göndermek daha sağlıklı.
+            if getattr(game_state, 'is_edge_placement', False):
+                new_mult += 1.0 # x2 olması için +1 ekliyoruz (Base 1.0 + 1.0 = 2.0)
         
         # 2. VOID WALKER: Void < 5 ise x3
         elif key == 'void_walker':
@@ -47,6 +38,18 @@ class TotemLogic:
             new_mult += 3.0 # x4 olması için +3 ekle
             # Void eksiltme işlemi game.py'de puan eklendikten sonra yapılır
             # Burası sadece hesaplama.
+        
+        # 4. RUBY LENS: RED bloklar için +2 Mult
+        elif key == 'ruby_lens':
+            last_tag = getattr(game_state, 'last_placed_block_tag', 'NONE')
+            if last_tag == 'RED':
+                new_mult += 2.0
+        
+        # 5. SAPPHIRE LENS: BLUE bloklar için +2 Mult
+        elif key == 'sapphire_lens':
+            last_tag = getattr(game_state, 'last_placed_block_tag', 'NONE')
+            if last_tag == 'BLUE':
+                new_mult += 2.0
             
         return new_mult, new_bonus
 
@@ -67,6 +70,57 @@ class TotemLogic:
             if cleared_cells > 0:
                 money_gain += cleared_cells * 0.5
                 
+        return money_gain
+
+    @staticmethod
+    def apply_round_end(key, game_state):
+        """
+        Round sonunda çalışan ekonomi totemleri.
+        Returns: (money_gain, description_text)
+        """
+        money_gain = 0
+        desc = ""
+        
+        # SAVINGS BOND: Mevcut kredinin %20'si kadar faiz
+        if key == 'savings_bond':
+            interest = int(game_state.credits * 0.20)
+            if interest > 0:
+                money_gain = interest
+                desc = f"+${interest} Interest"
+        
+        return money_gain, desc
+
+    @staticmethod
+    def check_gambling(key, game_state):
+        """
+        Kumar totemi kontrolü.
+        Returns: (should_destroy, bonus_score)
+        GAMBLER'S DICE: %25 şansla blok yok edilir ve x5 skor kazanılır.
+        """
+        if key == 'gamblers_dice':
+            if random.random() < 0.25:  # %25 şans
+                # Bloğun baz puanını hesapla ve x5 yap
+                if game_state.held_block:
+                    cells = sum(r.count(1) for r in game_state.held_block.matrix)
+                    base_points = cells * SCORE_PER_BLOCK
+                    bonus_score = base_points * 5
+                    return True, bonus_score
+        return False, 0
+
+    @staticmethod
+    def apply_on_place(key, game_state):
+        """
+        Blok yerleştirme anında çalışanlar (renk sinerji ödülleri).
+        Returns: money_gain
+        """
+        money_gain = 0
+        
+        # GOLDEN TICKET: GOLD blok yerleştirildiğinde +$3
+        if key == 'golden_ticket':
+            last_tag = getattr(game_state, 'last_placed_block_tag', 'NONE')
+            if last_tag == 'GOLD':
+                money_gain = 3
+        
         return money_gain
 
     @staticmethod

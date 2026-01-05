@@ -103,6 +103,21 @@ SHAPE_COLORS = {
     'L': (255, 150, 0), 'DOT': (200, 200, 200)
 }
 
+# --- BLOCK TAG SYSTEM ---
+BLOCK_TAGS = ['NONE', 'RED', 'BLUE', 'GOLD']
+BLOCK_TAG_COLORS = {
+    'NONE': None,  # Blok kendi rengini kullanır
+    'RED': (255, 80, 80),
+    'BLUE': (80, 150, 255),
+    'GOLD': (255, 215, 0)
+}
+BLOCK_TAG_WEIGHTS = {
+    'NONE': 65,  # %65
+    'RED': 20,   # %20
+    'BLUE': 10,  # %10
+    'GOLD': 5    # %5
+}
+
 THEMES = {
     'NEON': {'bg': (20, 15, 30), 'grid_bg': (30, 25, 40), 'line': (60, 50, 80), 'style': 'glass'},
     'RETRO': {'bg': (40, 40, 40), 'grid_bg': (0, 0, 0), 'line': (0, 255, 0), 'style': 'pixel'},
@@ -118,6 +133,14 @@ TOTEM_DATA = {
     'midas': {'name': 'King Midas', 'price': 25, 'desc': '+$0.5 per Block', 'trigger': 'on_clear', 'rarity': 'Legendary'},
     'recycler': {'name': 'Recycler', 'price': 12, 'desc': 'Free Discard', 'trigger': 'passive', 'rarity': 'Rare'},
     'blood_pact': {'name': 'Blood Pact', 'price': 0, 'desc': 'x4 Mult / -1 Void', 'trigger': 'on_score', 'rarity': 'Legendary'},
+    # --- EKONOMİ TOTEMLERİ ---
+    'savings_bond': {'name': 'Savings Bond', 'price': 10, 'desc': '+20% interest at round end', 'trigger': 'on_round_end', 'rarity': 'Rare'},
+    'golden_ticket': {'name': 'Golden Ticket', 'price': 8, 'desc': '+$3 when placing GOLD block', 'trigger': 'on_place', 'rarity': 'Uncommon'},
+    # --- KUMAR TOTEMİ ---
+    'gamblers_dice': {'name': "Gambler's Dice", 'price': 5, 'desc': '25% destroy block, get x5 score', 'trigger': 'on_place', 'rarity': 'Uncommon'},
+    # --- RENK SİNERJİ TOTEMLERİ ---
+    'ruby_lens': {'name': 'Ruby Lens', 'price': 7, 'desc': '+2 Mult for RED blocks', 'trigger': 'on_score', 'rarity': 'Common'},
+    'sapphire_lens': {'name': 'Sapphire Lens', 'price': 7, 'desc': '+2 Mult for BLUE blocks', 'trigger': 'on_score', 'rarity': 'Common'},
 }
 
 GLYPHS = {

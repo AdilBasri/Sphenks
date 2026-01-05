@@ -166,8 +166,6 @@ class UIManager:
         surface.blit(o, (0,0))
 
     def draw_sidebar(self, surface, game):
-        # ... (Sidebar kodları aynı, uzunluktan dolayı kısalttım, öncekiyle aynı) ...
-        # (ÖNEMLİ: render_wrapped_text fonksiyonunu class içinde tuttuğuna emin ol)
         panel_rect = pygame.Rect(0, 0, SIDEBAR_WIDTH, VIRTUAL_H)
         pygame.draw.rect(surface, SIDEBAR_BG_COLOR, panel_rect)
         pygame.draw.line(surface, PANEL_BORDER, (SIDEBAR_WIDTH, 0), (SIDEBAR_WIDTH, VIRTUAL_H), 4)
@@ -374,11 +372,25 @@ class UIManager:
         surface.blit(overlay, (0,0))
         lbl = self.font_big.render("BAZAAR", True, ACCENT_COLOR)
         surface.blit(lbl, lbl.get_rect(center=(VIRTUAL_W//2, 30)))
+        
+        # --- KREDİ GÖSTERGESİ (Sağ üst köşe) ---
+        credits_bg = pygame.Rect(VIRTUAL_W - 100, 10, 90, 35)
+        pygame.draw.rect(surface, (20, 40, 20), credits_bg, border_radius=15)
+        pygame.draw.rect(surface, (50, 200, 50), credits_bg, 2, border_radius=15)
+        credits_txt = self.font_bold.render(f"${game.credits}", True, (100, 255, 100))
+        surface.blit(credits_txt, credits_txt.get_rect(center=credits_bg.center))
+        
         start_x = (VIRTUAL_W - (3*90)) // 2
+        mx, my = pygame.mouse.get_pos()
+        hovered_totem = None
+        
         for i, totem in enumerate(game.shop_totems):
             rect = pygame.Rect(start_x + (i*90), 80, 70, 100)
             col = (50, 40, 60)
-            if rect.collidepoint(pygame.mouse.get_pos()): col = (70, 60, 80)
+            is_hovered = rect.collidepoint(mx, my)
+            if is_hovered:
+                col = (70, 60, 80)
+                hovered_totem = totem
             pygame.draw.rect(surface, col, rect, border_radius=4)
             pygame.draw.rect(surface, ACCENT_COLOR, rect, 1, border_radius=4)
             n = self.font_small.render(totem.name[:8], True, (255,255,255))
@@ -386,6 +398,37 @@ class UIManager:
             surface.blit(n, (rect.x + 2, rect.y + 5))
             surface.blit(p, (rect.x + 2, rect.bottom - 20))
             totem.rect = rect
+        
+        # --- TOOLTIP SİSTEMİ ---
+        if hovered_totem:
+            tooltip_w = 180
+            tooltip_h = 70
+            
+            # Tooltip konumu (fare imlecinin yanında)
+            tt_x = mx + 15
+            tt_y = my + 10
+            
+            # Ekran dışına taşmayı önle
+            if tt_x + tooltip_w > VIRTUAL_W:
+                tt_x = mx - tooltip_w - 10
+            if tt_y + tooltip_h > VIRTUAL_H:
+                tt_y = my - tooltip_h - 10
+            
+            tt_rect = pygame.Rect(tt_x, tt_y, tooltip_w, tooltip_h)
+            
+            # Koyu arkaplan ve kenarlık
+            pygame.draw.rect(surface, (15, 15, 20), tt_rect, border_radius=6)
+            pygame.draw.rect(surface, (100, 100, 120), tt_rect, 2, border_radius=6)
+            
+            # Totem adı
+            name_txt = self.font_bold.render(hovered_totem.name, True, TOTAL_COLOR)
+            surface.blit(name_txt, (tt_rect.x + 8, tt_rect.y + 8))
+            
+            # Totem açıklaması (sarmalı)
+            desc_font = pygame.font.SysFont(FONT_NAME, 11)
+            self.render_wrapped_text(surface, hovered_totem.desc, desc_font, (200, 200, 200),
+                                     tt_rect.x + 8, tt_rect.y + 28, tooltip_w - 16, line_spacing=13)
+        
         nxt = self.font_bold.render("NEXT ROUND >", True, (255,255,255))
         nxt_rect = nxt.get_rect(bottomright=(VIRTUAL_W - 30, VIRTUAL_H - 30))
         surface.blit(nxt, nxt_rect)
