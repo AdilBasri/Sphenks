@@ -1,8 +1,11 @@
 # block.py
 import pygame
+import math
+import random # EKLENDİ
 from settings import *
 
 def lerp(start, end, amount):
+    """İki değer arasında yumuşak geçiş sağlar (Linear Interpolation)"""
     return start + (end - start) * amount
 
 class Block:
@@ -11,23 +14,30 @@ class Block:
         self.matrix = SHAPES[shape_key]
         self.base_color = SHAPE_COLORS[shape_key]
         self.color = self.base_color
+        
         self.update_dimensions()
         
         # MANTIKSAL (Hitbox)
         self.rect = pygame.Rect(0, 0, self.width, self.height)
         self.original_pos = (0, 0)
         
-        # GÖRSEL (Animasyonlu)
+        # GÖRSEL (Animasyon)
         self.visual_x = 0
         self.visual_y = 0
         
+        # FİZİK
         self.dragging = False
         self.offset_x = 0
         self.offset_y = 0
+        
+        # Efektler
         self.scale = 1.0
         self.target_scale = 1.0
-        self.current_rotation = 0
-        self.target_rotation = 0
+        self.angle = 0
+        self.target_angle = 0
+        
+        # Idle Animasyon (Rastgele başlangıç)
+        self.idle_offset = random.uniform(0, 6.28) 
 
     def update_dimensions(self):
         self.rows = len(self.matrix)
@@ -40,66 +50,89 @@ class Block:
         self.update_dimensions()
         self.rect.width = self.width
         self.rect.height = self.height
-        self.current_rotation += 90 
+        
+        # Pop efekti
+        self.target_scale = 1.2
+        self.angle += 90 
 
-    # --- EKSİK OLAN FONKSİYON BUYDU ---
     def flip(self):
-        """Bloğu yatayda aynalar"""
         self.matrix = [row[::-1] for row in self.matrix]
         self.update_dimensions()
-        # Flip yapınca da rect boyutlarını güncellemek iyi olur (simetrik olmayanlarda)
         self.rect.width = self.width
         self.rect.height = self.height
+        self.target_scale = 1.2 
 
     def update(self):
+        # 1. HEDEF BELİRLEME
+        target_x = 0
+        target_y = 0
+        
         if self.dragging:
-            self.target_scale = 1.1 
-            delta_x = self.rect.x - self.visual_x
-            self.target_rotation = -delta_x * 0.5 
-            self.target_rotation = max(-15, min(15, self.target_rotation))
+            mx, my = pygame.mouse.get_pos()
+            target_x = mx - self.offset_x
+            target_y = my - self.offset_y
+            
+            self.target_scale = 1.15
+            
+            # Tilt (Yatma) Hesabı
+            delta_x = target_x - self.visual_x
+            tilt = -delta_x * 0.5 
+            self.target_angle = max(-20, min(20, tilt))
+            
         else:
-            self.target_scale = 1.0 
-            self.target_rotation = 0
+            target_x = self.rect.x
+            target_y = self.rect.y
+            
+            self.target_scale = 1.0
+            self.target_angle = 0
+            
+            # Idle Float (Nefes Alma)
+            time = pygame.time.get_ticks() / 500
+            float_y = math.sin(time + self.idle_offset) * 3
+            target_y += float_y
 
-        self.visual_x = lerp(self.visual_x, self.rect.x, 0.3)
-        self.visual_y = lerp(self.visual_y, self.rect.y, 0.3)
+        # 2. FİZİK (LERP)
+        self.visual_x = lerp(self.visual_x, target_x, 0.25)
+        self.visual_y = lerp(self.visual_y, target_y, 0.25)
+        self.angle = lerp(self.angle, self.target_angle, 0.15)
         self.scale = lerp(self.scale, self.target_scale, 0.2)
-        self.current_rotation = lerp(self.current_rotation, self.target_rotation, 0.2)
+
+        # Hitbox güncelle (Sadece boşta ise)
+        if not self.dragging:
+            self.rect.x = int(self.visual_x)
+            # Y'yi güncellemiyoruz çünkü idle animasyon hitboxı bozmasın
 
     def draw(self, surface, x, y, scale=1.0, alpha=255, theme_type='glass'):
-        # Ghost Blok Mantığı (Önceki fix)
-        use_override_pos = (x != 0 or y != 0)
+        # Ghost blok mu? (Koordinat override edilmişse evet)
+        is_ghost = (x != 0 or y != 0)
         
-        draw_x = x if use_override_pos else self.visual_x
-        draw_y = y if use_override_pos else self.visual_y
+        draw_x = x if is_ghost else self.visual_x
+        draw_y = y if is_ghost else self.visual_y
         
-        if self.dragging and alpha == 255:
-            draw_x = self.visual_x
-            draw_y = self.visual_y
-
-        final_scale = scale * self.scale
-        current_tile_size = int(TILE_SIZE * final_scale)
+        current_angle = 0 if is_ghost else self.angle
+        current_scale = scale if is_ghost else (scale * self.scale)
         
-        gap = 0
-        if theme_type == 'glass': gap = int(current_tile_size * 0.1)
-        elif theme_type == 'flat': gap = int(current_tile_size * 0.15)
+        base_tile = TILE_SIZE
+        final_tile_size = int(base_tile * current_scale)
+        gap = int(final_tile_size * 0.1)
+        block_size = final_tile_size - gap
 
-        block_size = current_tile_size - gap
-
-        if alpha < 255:
-            surf_w = int(self.width * final_scale + 50)
-            surf_h = int(self.height * final_scale + 50)
-            temp_surface = pygame.Surface((surf_w, surf_h), pygame.SRCALPHA)
-            dx, dy = 10, 10 
-        else:
-            temp_surface = surface
-            dx, dy = draw_x, draw_y
+        # Yüzey Oluştur
+        surf_w = int(self.width * current_scale * 1.5) + 50
+        surf_h = int(self.height * current_scale * 1.5) + 50
+        temp_surface = pygame.Surface((surf_w, surf_h), pygame.SRCALPHA)
+        
+        center_x = surf_w // 2
+        center_y = surf_h // 2
+        
+        start_draw_x = center_x - (self.cols * final_tile_size) // 2
+        start_draw_y = center_y - (self.rows * final_tile_size) // 2
 
         for r_idx, row in enumerate(self.matrix):
             for c_idx, val in enumerate(row):
                 if val == 1:
-                    bx = dx + (c_idx * current_tile_size) + (gap // 2)
-                    by = dy + (r_idx * current_tile_size) + (gap // 2)
+                    bx = start_draw_x + (c_idx * final_tile_size) + (gap // 2)
+                    by = start_draw_y + (r_idx * final_tile_size) + (gap // 2)
                     rect = pygame.Rect(bx, by, block_size, block_size)
 
                     if theme_type == 'glass':
@@ -107,10 +140,10 @@ class Block:
                         if alpha < 255: 
                             pygame.draw.rect(temp_surface, (*c, alpha), rect, border_radius=6)
                         else:
-                            dark_color = (max(0, c[0]-50), max(0, c[1]-50), max(0, c[2]-50))
-                            pygame.draw.rect(temp_surface, dark_color, rect, border_radius=6)
-                            center = rect.inflate(-10, -10)
-                            pygame.draw.rect(temp_surface, (min(255, c[0]+80), min(255, c[1]+80), min(255, c[2]+80)), center, border_radius=4)
+                            dark = (max(0, c[0]-50), max(0, c[1]-50), max(0, c[2]-50))
+                            light = (min(255, c[0]+80), min(255, c[1]+80), min(255, c[2]+80))
+                            pygame.draw.rect(temp_surface, dark, rect, border_radius=6)
+                            pygame.draw.rect(temp_surface, light, rect.inflate(-10, -10), border_radius=4)
                             pygame.draw.rect(temp_surface, c, rect, 2, border_radius=6)
                     
                     elif theme_type == 'pixel':
@@ -118,11 +151,18 @@ class Block:
                          pygame.draw.rect(temp_surface, c, rect)
                          pygame.draw.rect(temp_surface, (0,0,0, alpha) if alpha < 255 else (0,0,0), rect, 2)
 
-                    elif theme_type == 'flat':
-                        c = self.color
-                        pastel = ((c[0]+255)//2, (c[1]+255)//2, (c[2]+255)//2)
-                        if alpha < 255: pastel = (*pastel, alpha)
-                        pygame.draw.rect(temp_surface, pastel, rect, border_radius=10)
-
-        if alpha < 255:
-            surface.blit(temp_surface, (draw_x - 10, draw_y - 10))
+        # Döndür ve Çiz
+        if current_angle != 0:
+            rotated_surface = pygame.transform.rotate(temp_surface, current_angle)
+            new_rect = rotated_surface.get_rect()
+            
+            # Bloğun merkezini bul
+            block_center_x = draw_x + (self.width * current_scale) / 2
+            block_center_y = draw_y + (self.height * current_scale) / 2
+            
+            new_rect.center = (block_center_x, block_center_y)
+            surface.blit(rotated_surface, new_rect)
+        else:
+            blit_x = draw_x - start_draw_x
+            blit_y = draw_y - start_draw_y
+            surface.blit(temp_surface, (blit_x, blit_y))

@@ -7,7 +7,7 @@ import os
 from settings import *
 from grid import Grid
 from block import Block
-from effects import ParticleSystem
+from effects import ParticleSystem, BossAtmosphere
 from totems import Totem, TotemLogic, TOTEM_DATA
 from glyphs import Glyph, GLYPHS
 from ui import UIManager       
@@ -32,7 +32,8 @@ class Game:
         self.high_score = self.load_high_score()
         
         self.grid = Grid()
-        # Izgara konumu (Eski haliyle kalsın, UI'dan bağımsız ortalayalım)
+        
+        # Konumlandırma
         play_area_center_x = SIDEBAR_WIDTH + (PLAY_AREA_W // 2)
         play_area_center_y = VIRTUAL_H // 2
         
@@ -57,10 +58,12 @@ class Game:
             except:
                 return 0
         return 0
+    
     def save_high_score(self):
-        with open("highscore.txt", "w") as f:
-            f.write(str(self.high_score))
-    def get_current_theme(self): return THEMES['NEON']
+        with open("highscore.txt", "w") as f: f.write(str(self.high_score))
+
+    def get_current_theme(self):
+        return THEMES['NEON']
 
     def init_game_session_data(self):
         self.credits = STARTING_CREDITS
@@ -69,11 +72,14 @@ class Game:
         self.visual_score = 0
         self.ante = 1
         self.round = 1 
+        
         self.screen_shake = 0
         self.combo_counter = 0
         self.scoring_data = {'base': 0, 'mult': 0, 'total': 0}
+        
         self.current_boss = None 
         self.active_boss_effect = None 
+        
         self.grid.reset()
         self.blocks = []
         self.held_block = None
@@ -116,6 +122,7 @@ class Game:
         if self.active_boss_effect == 'The Wall':
             self.grid.place_stones(3)
             self.particle_system.create_text(self.w//2, self.h//2, "BOSS: THE WALL", (150, 150, 150))
+            self.particle_system.atmosphere.trigger_shake(10, 4) 
 
         self.refill_hand()
         self.state = STATE_PLAYING
@@ -185,6 +192,7 @@ class Game:
         total_width = PLAY_AREA_W * 0.6
         start_x = area_center_x - (total_width // 2)
         gap = total_width // 3
+        
         bg_y = VIRTUAL_H - HAND_BG_HEIGHT
         center_y = bg_y + (HAND_BG_HEIGHT // 2)
         
@@ -195,8 +203,9 @@ class Game:
                 b.rect.x = target_x
                 b.rect.y = target_y
                 b.original_pos = (target_x, target_y)
-                b.visual_x = target_x
-                b.visual_y = target_y
+                if b.visual_x == 0 and b.visual_y == 0:
+                    b.visual_x = target_x
+                    b.visual_y = target_y
 
     def get_grid_pos(self, mx, my):
         rx, ry = mx - self.grid_offset_x, my - self.grid_offset_y
@@ -217,12 +226,9 @@ class Game:
     def generate_shop(self):
         self.shop_totems = []
         keys = list(TOTEM_DATA.keys())
-        
-        # --- HATA DÜZELTME: ARTIK EŞLEŞİYOR ---
         for _ in range(3):
-            k = random.choice(keys) # Anahtarı BİR KERE seç
-            self.shop_totems.append(Totem(k, TOTEM_DATA[k])) # Aynı anahtarı kullan
-            
+            k = random.choice(keys)
+            self.shop_totems.append(Totem(k, TOTEM_DATA[k]))
         self.state = STATE_SHOP
 
     def buy_totem(self, t):
@@ -258,15 +264,18 @@ class Game:
             elif self.state == STATE_PLAYING:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE: self.state = STATE_PAUSE
+                
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     if hasattr(self, 'menu_btn_rect') and self.menu_btn_rect.collidepoint(mx, my): self.state = STATE_PAUSE
                     if event.button == 1: 
                         for b in self.blocks:
                             if b.rect.collidepoint(mx, my):
-                                self.held_block = b; self.held_block.dragging = True
-                                self.held_block.offset_x = mx - b.rect.x 
-                                self.held_block.offset_y = my - b.rect.y
-                                self.audio.play('place'); break
+                                self.held_block = b
+                                self.held_block.dragging = True
+                                self.held_block.offset_x = mx - b.visual_x 
+                                self.held_block.offset_y = my - b.visual_y
+                                self.audio.play('place')
+                                break
                     elif event.button == 3 and self.held_block: self.held_block.rotate()
                     elif event.button == 2 and self.held_block: self.held_block.flip()
 
@@ -289,8 +298,9 @@ class Game:
                                 except: pass
                             else:
                                 self.audio.play('hit')
-                                self.held_block.rect.topleft = self.held_block.original_pos
-                            self.held_block = None; return
+                            self.held_block.dragging = False
+                            self.held_block = None
+                            return
 
                         cur_x = mx - self.held_block.offset_x
                         cur_y = my - self.held_block.offset_y
@@ -301,16 +311,18 @@ class Game:
                         if gr is not None and gc is not None:
                             target_px = self.grid_offset_x + gc * TILE_SIZE
                             target_py = self.grid_offset_y + gr * TILE_SIZE
+                            orig_pos = self.held_block.rect.topleft
                             self.held_block.rect.topleft = (target_px, target_py)
+                            
                             if self.grid.is_valid_position(self.held_block, gr, gc):
                                 self.grid.place_block(self.held_block, gr, gc)
                                 self.last_grid_pos = (gr, gc)
+                                
                                 self.is_edge_placement = False
                                 for r in range(self.held_block.rows):
                                     for c in range(self.held_block.cols):
                                         if self.held_block.matrix[r][c] == 1:
-                                            abs_r = gr + r
-                                            abs_c = gc + c
+                                            abs_r = gr + r; abs_c = gc + c
                                             if abs_r == 0 or abs_r == GRID_SIZE-1 or abs_c == 0 or abs_c == GRID_SIZE-1:
                                                 self.is_edge_placement = True
                                 
@@ -322,15 +334,19 @@ class Game:
                                 cr, cc = self.grid.check_clears()
                                 stones_after = sum(row.count(STONE_COLOR) for row in self.grid.grid if row)
                                 stones_destroyed = stones_before - stones_after
-                                
                                 total_clears = len(cr) + len(cc)
                                 cleared_cells_count = total_clears * GRID_SIZE
                                 
                                 if total_clears > 0:
+                                    # --- PARLAMA EFEKTİ SADECE BURADA ---
+                                    self.grid.trigger_beat() 
+                                    # ------------------------------------
+
                                     base_points += total_clears * SCORE_PER_LINE
                                     self.credits += total_clears
                                     self.combo_counter += 1
-                                    self.screen_shake = 5 * total_clears
+                                    self.screen_shake = 2 * total_clears
+                                    self.particle_system.atmosphere.trigger_shake(10, 3) 
                                     self.audio.play('clear')
                                     
                                     theme = self.get_current_theme()
@@ -373,13 +389,15 @@ class Game:
                                 if self.state != STATE_SCORING: self.refill_hand()
                             else:
                                 self.audio.play('hit')
-                                self.held_block.rect.topleft = self.held_block.original_pos
-                        else: self.held_block.rect.topleft = self.held_block.original_pos
-                        self.held_block.dragging = False; self.held_block = None
+                                self.held_block.rect.topleft = self.held_block.original_pos 
+                        else:
+                            self.held_block.rect.topleft = self.held_block.original_pos
+                        
+                        self.held_block.dragging = False
+                        self.held_block = None
+
                 elif event.type == pygame.MOUSEMOTION:
-                    if self.held_block and self.held_block.dragging:
-                        self.held_block.rect.x = mx - self.held_block.offset_x
-                        self.held_block.rect.y = my - self.held_block.offset_y
+                    pass
 
             elif self.state == STATE_SHOP:
                 if event.type == pygame.MOUSEBUTTONDOWN:
@@ -394,10 +412,16 @@ class Game:
         self.ui.update()
         self.particle_system.update()
         if self.screen_shake > 0: self.screen_shake -= 1
+        
+        self.grid.update()
+        # --- BEAT TIMER SILINDI ---
+        
         diff = self.score - self.visual_score
         if diff > 0: self.visual_score += max(1, diff // 5)
+        
         if self.state == STATE_PLAYING:
             for b in self.blocks: b.update()
+            
         elif self.state == STATE_SCORING:
             self.scoring_timer += 1
             if self.scoring_timer > 60:
@@ -408,15 +432,25 @@ class Game:
 
     def draw(self):
         self.ui.draw_bg(self.screen)
+        
         if self.state == STATE_MENU:
             self.ui.draw_menu(self.screen, self.high_score)
         else:
+            boss_shake_x, boss_shake_y = self.particle_system.atmosphere.get_shake_offset()
+            normal_shake_x = random.randint(-self.screen_shake, self.screen_shake) if self.screen_shake > 0 else 0
+            normal_shake_y = random.randint(-self.screen_shake, self.screen_shake) if self.screen_shake > 0 else 0
+            
+            total_shake_x = boss_shake_x + normal_shake_x
+            total_shake_y = boss_shake_y + normal_shake_y
+
             self.ui.draw_sidebar(self.screen, self)
             self.ui.draw_hand_bg(self.screen)
             self.ui.draw_top_bar(self.screen, self)
+            
             theme = self.get_current_theme()
-            off_x = random.randint(-self.screen_shake, self.screen_shake) if self.screen_shake > 0 else 0
-            self.grid.draw(self.screen, off_x, 0, theme)
+            
+            self.grid.draw(self.screen, total_shake_x, total_shake_y, theme)
+            
             if self.active_boss_effect != 'The Haze': 
                 if self.held_block and self.held_block.dragging:
                     cur_x = pygame.mouse.get_pos()[0] - self.held_block.offset_x
@@ -431,17 +465,31 @@ class Game:
                         if self.grid.is_valid_position(self.held_block, gr, gc):
                             self.held_block.draw(self.screen, target_px, target_py, 1.0, 60, theme['style'])
                         self.held_block.rect.topleft = orig
+            
             for b in self.blocks:
                 if b != self.held_block: b.draw(self.screen, 0, 0, 0.8, 255, theme['style'])
             if self.held_block: self.held_block.draw(self.screen, 0, 0, 1.0, 255, theme['style'])
+            
+            danger_level = 0.0
+            if self.active_boss_effect: danger_level = 0.2 
+            self.particle_system.atmosphere.draw_overlay(self.screen, danger_level)
+            
             self.particle_system.draw(self.screen)
             self.ui.draw_hud_elements(self.screen, self)
             if self.state == STATE_SHOP: self.ui.draw_shop(self.screen, self)
             elif self.state == STATE_PAUSE: self.ui.draw_pause_overlay(self.screen)
             elif self.state == STATE_GAME_OVER: self.ui.draw_game_over(self.screen, self.score)
+        
         self.crt.draw(self.screen)
         pygame.display.flip()
 
     def run(self):
         while True:
-            self.handle_events(); self.update(); self.draw(); self.clock.tick(FPS)
+            self.handle_events()
+            self.update()
+            self.draw()
+            self.clock.tick(FPS)
+
+if __name__ == '__main__':
+    game = Game()
+    game.run()

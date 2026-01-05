@@ -90,13 +90,54 @@ class HypeText:
                 surface.blit(scaled_shadow, (rect.x + 3, rect.y + 3))
                 surface.blit(scaled_text, rect)
 
+class BossAtmosphere:
+    def __init__(self, screen_width, screen_height):
+        self.shake_timer = 0
+        self.shake_magnitude = 0
+        self.screen_width = screen_width
+        self.screen_height = screen_height
+        
+        # Vignette (Kenar Karartma) Yüzeyi
+        self.vignette_surface = pygame.Surface((screen_width, screen_height), pygame.SRCALPHA)
+        self.create_vignette()
+
+    def create_vignette(self):
+        """Kenarları karanlık/kırmızımsı bir overlay oluşturur."""
+        # Basitçe tüm ekranı kaplayan kırmızı bir tül yapıyoruz, alpha değerini draw'da değiştireceğiz
+        self.vignette_surface.fill((50, 0, 0)) 
+
+    def trigger_shake(self, duration=15, magnitude=5):
+        """Ekranı sallar."""
+        self.shake_timer = duration
+        self.shake_magnitude = magnitude
+
+    def get_shake_offset(self):
+        """Çizim yaparken sahneyi ne kadar kaydıracağımızı döndürür."""
+        if self.shake_timer > 0:
+            self.shake_timer -= 1
+            offset_x = random.randint(-self.shake_magnitude, self.shake_magnitude)
+            offset_y = random.randint(-self.shake_magnitude, self.shake_magnitude)
+            return offset_x, offset_y
+        return 0, 0
+
+    def draw_overlay(self, surface, intensity=0.0):
+        """
+        intensity (0.0 - 1.0): Tehlike seviyesi.
+        0.0: Görünmez
+        1.0: Çok yoğun kırmızı/karanlık atmosfer
+        """
+        if intensity > 0:
+            alpha = int(intensity * 100) # Maksimum opaklık 100
+            self.vignette_surface.set_alpha(alpha)
+            surface.blit(self.vignette_surface, (0, 0))
+
 class ParticleSystem:
     def __init__(self):
         self.particles = []
         self.texts = []
+        self.atmosphere = BossAtmosphere(VIRTUAL_W, VIRTUAL_H) # Yeni
 
     def create_explosion(self, x, y, count=20):
-        # Konfeti Patlaması
         for _ in range(count):
             self.particles.append(Confetti(x, y))
     
