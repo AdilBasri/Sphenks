@@ -8,7 +8,7 @@ from settings import *
 from grid import Grid
 from block import Block
 from effects import ParticleSystem, BossAtmosphere
-from totems import Totem, TotemLogic, TOTEM_DATA
+from totems import Totem, TotemLogic, TOTEM_DATA, OMEGA_KEYS
 from ui import UIManager       
 from audio import AudioManager 
 from crt import CRTManager 
@@ -45,6 +45,8 @@ class Game:
         self.trash_rect = pygame.Rect(self.w - 80, self.h - 80, 40, 50)
         self.menu_btn_rect = pygame.Rect(0,0,0,0)
         
+        self.force_omega_shop = False # Yeni Dünya dükkanı için bayrak
+        
         self.state = STATE_MENU 
         self.init_game_session_data() 
 
@@ -60,6 +62,9 @@ class Game:
         with open("highscore.txt", "w") as f: f.write(str(self.high_score))
 
     def get_current_theme(self):
+        # Ante 9 ve sonrası için yeni dünya teması
+        if self.ante >= NEW_WORLD_ANTE:
+            return THEMES['CRIMSON']
         return THEMES['NEON']
 
     def init_game_session_data(self):
@@ -69,6 +74,7 @@ class Game:
         self.visual_score = 0
         self.ante = 1
         self.round = 1 
+        self.force_omega_shop = False
         
         self.boss_preview = random.choice(list(BOSS_DATA.keys()))
         
@@ -87,10 +93,19 @@ class Game:
         self.last_placed_block_tag = 'NONE'
 
     def get_blind_target(self, round_num):
-        base_target = 300 * self.ante
-        if round_num == 1: return int(base_target * 1.0)
-        elif round_num == 2: return int(base_target * 1.5)
-        elif round_num == 3: return int(base_target * 2.5)
+        # --- ZORLUK DENGELEME FORMÜLÜ ---
+        # 1. Base Scaling: Ante arttıkça katlanarak artar (Üs: 1.2)
+        base_target = 300 * (self.ante ** 1.3)
+        
+        # 2. Totem Scaling: Oyuncu güçlendikçe (Totem sayısı arttıkça) hedef zorlaşır
+        # 5 Totem varsa hedef %75 daha fazla olur.
+        totem_penalty = 1.0 + (len(self.totems) * 0.15) 
+        
+        adjusted_target = int(base_target * totem_penalty)
+
+        if round_num == 1: return int(adjusted_target * 1.0)
+        elif round_num == 2: return int(adjusted_target * 1.5)
+        elif round_num == 3: return int(adjusted_target * 2.5)
         return 0
 
     def start_new_game(self):
@@ -198,6 +213,23 @@ class Game:
             self.round = 1
             self.ante += 1
             self.boss_preview = random.choice(list(BOSS_DATA.keys()))
+            
+            # --- YENİ DÜNYAYA GEÇİŞ KONTROLÜ (ANTE 8 -> 9) ---
+            if self.ante == NEW_WORLD_ANTE:
+                self.audio.play('explode') # Dramatik ses efekti
+                self.particle_system.atmosphere.trigger_shake(30, 10)
+                self.crt.trigger_aberration(amount=5, duration=60)
+                
+                # 1. Totem Yok Etme (Cezalandırma)
+                if self.totems:
+                    removed = self.totems.pop(random.randrange(len(self.totems)))
+                    self.particle_system.create_text(self.w//2, self.h//2, f"WORLD SHIFT: {removed.name} DESTROYED!", (255, 50, 50))
+                else:
+                    self.particle_system.create_text(self.w//2, self.h//2, "WORLD SHIFT: DARKNESS FALLS", (255, 50, 50))
+                
+                # 2. Özel Dükkanı Tetikle
+                self.force_omega_shop = True
+                
         self.state = STATE_ROUND_SELECT
 
     def position_blocks_in_hand(self):
@@ -238,10 +270,21 @@ class Game:
 
     def generate_shop(self):
         self.shop_totems = []
-        keys = list(TOTEM_DATA.keys())
-        for _ in range(3):
-            k = random.choice(keys)
-            self.shop_totems.append(Totem(k, TOTEM_DATA[k]))
+        
+        # --- OMEGA SHOP (DÜNYA GEÇİŞİNDE) ---
+        if self.force_omega_shop:
+            # Sadece 3 özel Omega totemi koy
+            for k in OMEGA_KEYS:
+                self.shop_totems.append(Totem(k, TOTEM_DATA[k]))
+            self.force_omega_shop = False # Bayrağı kapat, sonraki dükkanlar normal olsun
+        else:
+            # --- NORMAL SHOP ---
+            # Omega totemleri normal havuzdan çıkar (Sadece özel dükkanda çıksınlar)
+            normal_keys = [k for k in TOTEM_DATA.keys() if k not in OMEGA_KEYS]
+            for _ in range(3):
+                k = random.choice(normal_keys)
+                self.shop_totems.append(Totem(k, TOTEM_DATA[k]))
+        
         self.state = STATE_SHOP
 
     def buy_totem(self, t):
@@ -371,7 +414,6 @@ class Game:
                                 
                                 stones_before = sum(row.count(STONE_COLOR) for row in self.grid.grid if row)
                                 
-                                # GÜNCEL KISIM: 4 DEĞER DÖNÜYOR
                                 cr, cc, col_bonus, match_cnt = self.grid.check_clears()
                                 
                                 stones_after = sum(row.count(STONE_COLOR) for row in self.grid.grid if row)
@@ -410,8 +452,16 @@ class Game:
                                     if extra_cash > 0:
                                         self.credits += int(extra_cash)
                                         self.particle_system.create_text(self.w-100, 100, f"+${extra_cash}", (100, 255, 100))
+                                    
+                                    # Infinity Stone ekstra çarpanı için basit hack:
+                                    # Eğer infinity_stone varsa burada ek mult verebiliriz ama TotemLogic'te sadece para verdik.
+                                    # İstersen şuraya ekleyebilirsin:
+                                    inf_mult = 0
+                                    for t in self.totems:
+                                        if t.key == 'infinity_stone': inf_mult += 2.0
+                                    
+                                    mult = self.calculate_totem_mult() + inf_mult
 
-                                    mult = self.calculate_totem_mult()
                                     hype_word = random.choice(HYPE_WORDS)
                                     self.particle_system.create_text(self.w//2, self.h//2 - 50, hype_word, (255, 215, 0))
                                     self.blocks.remove(self.held_block)

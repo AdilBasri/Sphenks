@@ -63,7 +63,7 @@ STARTING_CREDITS = 5
 DISCARD_COST = 1
 SCORE_PER_BLOCK = 5
 SCORE_PER_LINE = 50
-COLOR_MATCH_BONUS = 100 # YENİ: Yan yana aynı renk bonusu
+COLOR_MATCH_BONUS = 100 
 MAX_TOTEM_SLOTS = 5
 MAX_GLYPH_SLOTS = 3
 VOID_REFILL_AMOUNT = 3 
@@ -71,6 +71,7 @@ VOID_REFILL_AMOUNT = 3
 # --- ANTE & ROUND AYARLARI ---
 BASE_VOID_COUNT = 6 
 ROUND_SCALING = 1.5 
+NEW_WORLD_ANTE = 9  # Bu Ante'ye geçince oyun değişir
 
 # --- SES ---
 SFX_VOLUME = 0.4
@@ -83,7 +84,7 @@ SND_HIT = 'sounds/hit.wav'
 
 # --- STATES ---
 STATE_MENU = 'menu'
-STATE_ROUND_SELECT = 'round_select' # YENİ
+STATE_ROUND_SELECT = 'round_select'
 STATE_PLAYING = 'playing'
 STATE_SCORING = 'scoring' 
 STATE_SHOP = 'shop'
@@ -108,21 +109,22 @@ SHAPE_COLORS = {
 # --- BLOCK TAG SYSTEM ---
 BLOCK_TAGS = ['NONE', 'RED', 'BLUE', 'GOLD']
 BLOCK_TAG_COLORS = {
-    'NONE': None,  # Blok kendi rengini kullanır
+    'NONE': None,  
     'RED': (255, 80, 80),
     'BLUE': (80, 150, 255),
     'GOLD': (255, 215, 0)
 }
 BLOCK_TAG_WEIGHTS = {
-    'NONE': 65,  # %65
-    'RED': 20,   # %20
-    'BLUE': 10,  # %10
-    'GOLD': 5    # %5
+    'NONE': 65,  
+    'RED': 20,   
+    'BLUE': 10,  
+    'GOLD': 5    
 }
 
 THEMES = {
     'NEON': {'bg': (20, 15, 30), 'grid_bg': (30, 25, 40), 'line': (60, 50, 80), 'style': 'glass'},
     'RETRO': {'bg': (40, 40, 40), 'grid_bg': (0, 0, 0), 'line': (0, 255, 0), 'style': 'pixel'},
+    'CRIMSON': {'bg': (30, 0, 0), 'grid_bg': (10, 0, 0), 'line': (255, 50, 50), 'style': 'pixel'}, # Yeni Dünya Teması
     'CANDY': {'bg': (255, 240, 245), 'grid_bg': (255, 255, 255), 'line': (255, 180, 200), 'style': 'flat'}
 }
 
@@ -135,15 +137,20 @@ TOTEM_DATA = {
     'midas': {'name': 'King Midas', 'price': 25, 'desc': '+$0.5 per Block', 'trigger': 'on_clear', 'rarity': 'Legendary'},
     'recycler': {'name': 'Recycler', 'price': 12, 'desc': 'Free Discard', 'trigger': 'passive', 'rarity': 'Rare'},
     'blood_pact': {'name': 'Blood Pact', 'price': 0, 'desc': 'x4 Mult / -1 Void', 'trigger': 'on_score', 'rarity': 'Legendary'},
-    # --- EKONOMİ TOTEMLERİ ---
-    'savings_bond': {'name': 'Savings Bond', 'price': 10, 'desc': '+20% interest at round end', 'trigger': 'on_round_end', 'rarity': 'Rare'},
-    'golden_ticket': {'name': 'Golden Ticket', 'price': 8, 'desc': '+$3 when placing GOLD block', 'trigger': 'on_place', 'rarity': 'Uncommon'},
-    # --- KUMAR TOTEMİ ---
-    'gamblers_dice': {'name': "Gambler's Dice", 'price': 5, 'desc': '25% destroy block, get x5 score', 'trigger': 'on_place', 'rarity': 'Uncommon'},
-    # --- RENK SİNERJİ TOTEMLERİ ---
-    'ruby_lens': {'name': 'Ruby Lens', 'price': 7, 'desc': '+2 Mult for RED blocks', 'trigger': 'on_score', 'rarity': 'Common'},
-    'sapphire_lens': {'name': 'Sapphire Lens', 'price': 7, 'desc': '+2 Mult for BLUE blocks', 'trigger': 'on_score', 'rarity': 'Common'},
+    'savings_bond': {'name': 'Savings Bond', 'price': 10, 'desc': '+20% interest', 'trigger': 'on_round_end', 'rarity': 'Rare'},
+    'golden_ticket': {'name': 'Golden Ticket', 'price': 8, 'desc': '+$3 on GOLD block', 'trigger': 'on_place', 'rarity': 'Uncommon'},
+    'gamblers_dice': {'name': "Gambler's Dice", 'price': 5, 'desc': '25% destroy/x5 score', 'trigger': 'on_place', 'rarity': 'Uncommon'},
+    'ruby_lens': {'name': 'Ruby Lens', 'price': 7, 'desc': '+2 Mult for RED', 'trigger': 'on_score', 'rarity': 'Common'},
+    'sapphire_lens': {'name': 'Sapphire Lens', 'price': 7, 'desc': '+2 Mult for BLUE', 'trigger': 'on_score', 'rarity': 'Common'},
+    
+    # --- OMEGA TOTEMLER (Yeni Dünya İçin) ---
+    'dark_matter': {'name': 'Dark Matter', 'price': 40, 'desc': 'x10 Mult', 'trigger': 'on_score', 'rarity': 'Omega'},
+    'infinity_stone': {'name': 'Infinity Stone', 'price': 35, 'desc': '+$5 & x2 Mult on clear', 'trigger': 'on_clear', 'rarity': 'Omega'},
+    'chronos': {'name': 'Chronos', 'price': 30, 'desc': '+50% Interest', 'trigger': 'on_round_end', 'rarity': 'Omega'}
 }
+
+# Sadece Dükkan üretimi için ayrılmış liste
+OMEGA_KEYS = ['dark_matter', 'infinity_stone', 'chronos']
 
 GLYPHS = {
     'BOMB': {'name': 'Bomb', 'price': 4, 'desc': 'Destroy 3x3', 'color': (255, 50, 50)},
