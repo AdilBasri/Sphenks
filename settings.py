@@ -7,14 +7,14 @@ VIRTUAL_H = 480
 FPS = 60
 TITLE = "SPHENKS: ROGUELIKE"
 
-# --- SIDEBAR & LAYOUT (GÜNCELLENDİ) ---
-SIDEBAR_WIDTH = 190 # 240 -> 190 (Daha dar)
+# --- SIDEBAR & LAYOUT ---
+SIDEBAR_WIDTH = 190
 PLAY_AREA_W = VIRTUAL_W - SIDEBAR_WIDTH
 PLAY_AREA_H = VIRTUAL_H
 
-# --- UI ELEMENTLERİ (YENİ) ---
-TOTEM_ICON_SIZE = 40 # Tepedeki jokerlerin boyutu
-HAND_BG_HEIGHT = 90  # Aşağıdaki blok rafının yüksekliği
+# --- UI ELEMENTLERİ ---
+TOTEM_ICON_SIZE = 40
+HAND_BG_HEIGHT = 90
 
 # --- GRID ---
 TILE_SIZE = 30 
@@ -63,6 +63,7 @@ STARTING_CREDITS = 5
 DISCARD_COST = 1
 SCORE_PER_BLOCK = 5
 SCORE_PER_LINE = 50
+COLOR_MATCH_BONUS = 100 # YENİ: Yan yana aynı renk bonusu
 MAX_TOTEM_SLOTS = 5
 MAX_GLYPH_SLOTS = 3
 VOID_REFILL_AMOUNT = 3 
@@ -82,6 +83,7 @@ SND_HIT = 'sounds/hit.wav'
 
 # --- STATES ---
 STATE_MENU = 'menu'
+STATE_ROUND_SELECT = 'round_select' # YENİ
 STATE_PLAYING = 'playing'
 STATE_SCORING = 'scoring' 
 STATE_SHOP = 'shop'

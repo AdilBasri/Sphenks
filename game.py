@@ -32,7 +32,6 @@ class Game:
         
         self.grid = Grid()
         
-        # Konumlandırma
         play_area_center_x = SIDEBAR_WIDTH + (PLAY_AREA_W // 2)
         play_area_center_y = VIRTUAL_H // 2
         
@@ -54,8 +53,7 @@ class Game:
             try:
                 with open("highscore.txt", "r") as f:
                     return int(f.read())
-            except:
-                return 0
+            except: return 0
         return 0
     
     def save_high_score(self):
@@ -72,6 +70,8 @@ class Game:
         self.ante = 1
         self.round = 1 
         
+        self.boss_preview = random.choice(list(BOSS_DATA.keys()))
+        
         self.screen_shake = 0
         self.combo_counter = 0
         self.scoring_data = {'base': 0, 'mult': 0, 'total': 0}
@@ -86,23 +86,27 @@ class Game:
         self.is_edge_placement = False
         self.last_placed_block_tag = 'NONE'
 
+    def get_blind_target(self, round_num):
+        base_target = 300 * self.ante
+        if round_num == 1: return int(base_target * 1.0)
+        elif round_num == 2: return int(base_target * 1.5)
+        elif round_num == 3: return int(base_target * 2.5)
+        return 0
+
     def start_new_game(self):
         self.audio.play('select')
         self.init_game_session_data()
-        self.start_round()
+        self.state = STATE_ROUND_SELECT
 
     def start_round(self):
         self.active_boss_effect = None
         if self.round == 3:
-            self.current_boss = random.choice(list(BOSS_DATA.keys()))
+            self.current_boss = self.boss_preview
             self.active_boss_effect = self.current_boss
         else:
             self.current_boss = None
 
-        base_target = 300 * self.ante
-        if self.round == 1: self.level_target = int(base_target * 1.0)
-        elif self.round == 2: self.level_target = int(base_target * 1.5)
-        elif self.round == 3: self.level_target = int(base_target * 2.5)
+        self.level_target = self.get_blind_target(self.round)
         
         round_bonus = 0
         if self.round == 1: round_bonus = 3
@@ -171,15 +175,12 @@ class Game:
     def check_round_end(self):
         if self.score >= self.level_target:
             self.audio.play('select')
-            
-            # --- ROUND SONU FAİZ ---
             for t in self.totems:
                 if t.trigger_type == 'on_round_end':
                     money, desc = TotemLogic.apply_round_end(t.key, self)
                     if money > 0:
                         self.credits += money
                         self.particle_system.create_text(self.w//2, self.h//2, desc, (100, 255, 100))
-            
             self.state = STATE_LEVEL_COMPLETE
             self.generate_shop()
         else:
@@ -196,7 +197,8 @@ class Game:
         else:
             self.round = 1
             self.ante += 1
-        self.start_round()
+            self.boss_preview = random.choice(list(BOSS_DATA.keys()))
+        self.state = STATE_ROUND_SELECT
 
     def position_blocks_in_hand(self):
         area_center_x = SIDEBAR_WIDTH + (PLAY_AREA_W // 2)
@@ -246,13 +248,10 @@ class Game:
         if self.credits >= t.price and len(self.totems) < MAX_TOTEM_SLOTS:
             self.credits -= t.price
             self.totems.append(t)
-            
-            # Cashback
             for owned in self.totems:
                 if owned.key == 'cashback':
                     self.credits += 2
                     self.particle_system.create_text(self.w//2, 100, "+$2 Cashback", (100, 255, 100))
-            
             if t in self.shop_totems: self.shop_totems.remove(t)
             self.audio.play('clear')
 
@@ -269,6 +268,13 @@ class Game:
                             if rect.collidepoint(mx, my):
                                 if text == "PLAY": self.start_new_game()
                                 elif text == "EXIT": sys.exit()
+
+            elif self.state == STATE_ROUND_SELECT:
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if hasattr(self.ui, 'select_buttons'):
+                        for btn in self.ui.select_buttons:
+                            if btn.collidepoint(mx, my):
+                                self.start_round()
 
             elif self.state == STATE_PAUSE:
                 if event.type == pygame.MOUSEBUTTONDOWN:
@@ -303,7 +309,6 @@ class Game:
                             current_cost = DISCARD_COST
                             if any(t.key == 'recycler' for t in self.totems): current_cost = 0
                             if self.active_boss_effect == 'The Drain': current_cost = 3
-                            
                             if self.credits >= current_cost:
                                 self.credits -= current_cost
                                 try:
@@ -314,8 +319,7 @@ class Game:
                                     self.combo_counter = 0
                                     self.particle_system.create_text(mx, my, "REROLL!", (200, 200, 200))
                                 except: pass
-                            else:
-                                self.audio.play('hit')
+                            else: self.audio.play('hit')
                             self.held_block.dragging = False
                             self.held_block = None
                             return
@@ -333,9 +337,6 @@ class Game:
                             self.held_block.rect.topleft = (target_px, target_py)
                             
                             if self.grid.is_valid_position(self.held_block, gr, gc):
-                                
-                                # --- KUMAR TOTEMİ ---
-                                gambling_triggered = False
                                 for t in self.totems:
                                     if t.key == 'gamblers_dice':
                                         triggered, bonus = TotemLogic.check_gambling(t.key, self)
@@ -354,8 +355,7 @@ class Game:
                                 self.last_grid_pos = (gr, gc)
                                 self.last_placed_block_tag = self.held_block.tag
                                 
-                                for t in self.totems:
-                                    TotemLogic.apply_on_place(t.key, self)
+                                for t in self.totems: TotemLogic.apply_on_place(t.key, self)
 
                                 self.is_edge_placement = False
                                 for r in range(self.held_block.rows):
@@ -370,7 +370,10 @@ class Game:
                                 base_points = cells * SCORE_PER_BLOCK
                                 
                                 stones_before = sum(row.count(STONE_COLOR) for row in self.grid.grid if row)
-                                cr, cc = self.grid.check_clears()
+                                
+                                # GÜNCEL KISIM: 4 DEĞER DÖNÜYOR
+                                cr, cc, col_bonus, match_cnt = self.grid.check_clears()
+                                
                                 stones_after = sum(row.count(STONE_COLOR) for row in self.grid.grid if row)
                                 stones_destroyed = stones_before - stones_after
                                 total_clears = len(cr) + len(cc)
@@ -381,6 +384,10 @@ class Game:
                                     self.crt.trigger_aberration(amount=2, duration=5)
 
                                     base_points += total_clears * SCORE_PER_LINE
+                                    if col_bonus > 0:
+                                        base_points += col_bonus
+                                        self.particle_system.create_text(mx, my - 50, f"COLOR MATCH! +{col_bonus}", (255, 215, 0))
+
                                     self.credits += total_clears
                                     self.combo_counter += 1
                                     self.screen_shake = 2 * total_clears
@@ -472,6 +479,8 @@ class Game:
         
         if self.state == STATE_MENU:
             self.ui.draw_menu(self.screen, self.high_score)
+        elif self.state == STATE_ROUND_SELECT:
+            self.ui.draw_round_select(self.screen, self)
         else:
             boss_shake_x, boss_shake_y = self.particle_system.atmosphere.get_shake_offset()
             normal_shake_x = random.randint(-self.screen_shake, self.screen_shake) if self.screen_shake > 0 else 0
@@ -526,7 +535,3 @@ class Game:
             self.update()
             self.draw()
             self.clock.tick(FPS)
-
-if __name__ == '__main__':
-    game = Game()
-    game.run()

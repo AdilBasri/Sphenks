@@ -90,21 +90,71 @@ class Grid:
         return rows_to_shine, cols_to_shine
 
     def check_clears(self):
+        """
+        Dolu satır ve sütunları kontrol eder.
+        AYRICA: Satır/Sütun silinmeden önce 'Color Match' bonusunu hesaplar.
+        Returns: rows_to_clear, cols_to_clear, color_bonus, match_count
+        """
         rows_to_clear = []
         cols_to_clear = []
+        
+        # Renk Eşleşmesi İçin Veri
+        total_color_bonus = 0
+        match_count = 0
+
+        # --- SATIR KONTROLÜ ---
         for r in range(GRID_SIZE):
             if all(self.grid[r][c] is not None for c in range(GRID_SIZE)):
                 rows_to_clear.append(r)
+                # Satır dolu, renk analizi yap:
+                current_color = None
+                consecutive = 0
+                for c in range(GRID_SIZE):
+                    val = self.grid[r][c]
+                    # Stone (Taş) rengini sayma, sadece renkli bloklar
+                    if val != STONE_COLOR and val == current_color:
+                        consecutive += 1
+                    else:
+                        # Zincir bitti, kontrol et
+                        if consecutive >= 3:
+                            total_color_bonus += COLOR_MATCH_BONUS * consecutive
+                            match_count += 1
+                        current_color = val
+                        consecutive = 1 if val != STONE_COLOR else 0
+                # Satır sonu kontrolü
+                if consecutive >= 3:
+                    total_color_bonus += COLOR_MATCH_BONUS * consecutive
+                    match_count += 1
+
+        # --- SÜTUN KONTROLÜ ---
         for c in range(GRID_SIZE):
             if all(self.grid[r][c] is not None for r in range(GRID_SIZE)):
                 cols_to_clear.append(c)
+                # Sütun dolu, renk analizi yap:
+                current_color = None
+                consecutive = 0
+                for r in range(GRID_SIZE):
+                    val = self.grid[r][c]
+                    if val != STONE_COLOR and val == current_color:
+                        consecutive += 1
+                    else:
+                        if consecutive >= 3:
+                            total_color_bonus += COLOR_MATCH_BONUS * consecutive
+                            match_count += 1
+                        current_color = val
+                        consecutive = 1 if val != STONE_COLOR else 0
+                if consecutive >= 3:
+                    total_color_bonus += COLOR_MATCH_BONUS * consecutive
+                    match_count += 1
 
+        # Grid temizleme işlemi
         for r in rows_to_clear:
             for c in range(GRID_SIZE): self.grid[r][c] = None
         for c in cols_to_clear:
             for r in range(GRID_SIZE): self.grid[r][c] = None
                 
-        return rows_to_clear, cols_to_clear
+        # Dönen değerlere bonusları da ekliyoruz
+        return rows_to_clear, cols_to_clear, total_color_bonus, match_count
 
     def draw(self, screen, offset_x=0, offset_y=0, theme_data=None, highlight_rows=[], highlight_cols=[]):
         if theme_data is None: theme_data = THEMES['NEON']
