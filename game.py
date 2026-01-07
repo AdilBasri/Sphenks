@@ -788,12 +788,11 @@ class Game:
         
         if self.state == STATE_PLAYING:
             for b in self.blocks: b.update()
-            # Rün Sürükleme (Sanal koordinatlara çevir)
+            # Rune dragging - use direct mouse coordinates (no conversion needed)
             if self.held_rune and self.held_rune.dragging:
-                mx, my = self.crt.get_virtual_mouse_pos()
-                if mx is not None and my is not None:
-                    self.held_rune.x = mx
-                    self.held_rune.y = my
+                mx, my = pygame.mouse.get_pos()
+                self.held_rune.x = mx
+                self.held_rune.y = my
         
         elif self.state == STATE_DEBT:
             # Debt screen animation logic
