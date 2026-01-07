@@ -1,5 +1,6 @@
 # grid.py
 import pygame
+import sys
 from settings import *
 
 class Grid:
@@ -7,6 +8,10 @@ class Grid:
         self.grid = [[None for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
         self.surface = pygame.Surface((GRID_WIDTH, GRID_HEIGHT))
         self.rect = self.surface.get_rect(topleft=(0, 0))
+        
+        # Ekstra Veri Katmanları
+        self.grid_tags = [['NONE' for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
+        self.grid_runes = [[None for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)] # YENİ: Rün katmanı
         
         # --- REAKTİF ÖZELLİKLER ---
         self.pulse_intensity = 0 
@@ -20,23 +25,22 @@ class Grid:
 
     def reset(self):
         self.grid = [[None for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
+        self.grid_tags = [['NONE' for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
+        self.grid_runes = [[None for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
 
     def trigger_beat(self, intensity=1.0):
-        """
-        Sadece patlama anında çağrılır.
-        Gridi anlık olarak çok parlak yapar ve çerçeveyi kalınlaştırır.
-        """
-        self.pulse_intensity = 120 # Maksimum parlaklık (daha sert)
-        self.border_pulse = 6 # Çerçeve daha belirgin zıplasın
+        """Sadece patlama anında çağrılır."""
+        self.pulse_intensity = 120 
+        self.border_pulse = 6 
 
     def update(self):
-        """Parlaklığı normale döndür (Hızlı sönümleme)"""
+        """Parlaklığı normale döndür"""
         if self.pulse_intensity > 0:
-            self.pulse_intensity -= 8 # Daha hızlı normale dönsün (Snappy his)
+            self.pulse_intensity -= 8 
             if self.pulse_intensity < 0: self.pulse_intensity = 0
             
         if self.border_pulse > 0:
-            self.border_pulse -= 0.8 # Çerçeve de hızlı insin
+            self.border_pulse -= 0.8 
             if self.border_pulse < 0: self.border_pulse = 0
 
     def place_stones(self, count):
@@ -47,6 +51,7 @@ class Grid:
             c = random.randint(0, GRID_SIZE - 1)
             if self.grid[r][c] is None:
                 self.grid[r][c] = STONE_COLOR
+                self.grid_tags[r][c] = 'STONE'
                 placed += 1
 
     def is_valid_position(self, block, grid_row, grid_col):
@@ -63,65 +68,49 @@ class Grid:
         for r in range(block.rows):
             for c in range(block.cols):
                 if block.matrix[r][c] == 1:
+                    # Renk
                     self.grid[grid_row + r][grid_col + c] = block.color
-
-    def get_potential_clears(self, block, grid_row, grid_col):
-        rows_to_shine = []
-        cols_to_shine = []
-        block_cells = []
-        for r in range(block.rows):
-            for c in range(block.cols):
-                if block.matrix[r][c] == 1:
-                    block_cells.append((grid_row + r, grid_col + c))
-        for r in range(GRID_SIZE):
-            is_full = True
-            for c in range(GRID_SIZE):
-                if self.grid[r][c] is None and (r, c) not in block_cells:
-                    is_full = False
-                    break
-            if is_full: rows_to_shine.append(r)
-        for c in range(GRID_SIZE):
-            is_full = True
-            for r in range(GRID_SIZE):
-                if self.grid[r][c] is None and (r, c) not in block_cells:
-                    is_full = False
-                    break
-            if is_full: cols_to_shine.append(c)
-        return rows_to_shine, cols_to_shine
+                    # Tag
+                    tag = getattr(block, 'tag', 'NONE')
+                    self.grid_tags[grid_row + r][grid_col + c] = tag
+                    # Rune (YENİ)
+                    self.grid_runes[grid_row + r][grid_col + c] = block.rune
 
     def check_clears(self):
         """
-        Dolu satır ve sütunları kontrol eder.
-        AYRICA: Satır/Sütun silinmeden önce 'Color Match' bonusunu hesaplar.
-        Returns: rows_to_clear, cols_to_clear, color_bonus, match_count
+        Dolu satır/sütunları bulur ve temizler.
+        Returns: rows_to_clear, cols_to_clear, color_bonus, match_count, rune_bonuses
         """
         rows_to_clear = []
         cols_to_clear = []
         
-        # Renk Eşleşmesi İçin Veri
         total_color_bonus = 0
         match_count = 0
+        
+        # Rün Bonusları
+        rune_bonuses = {
+            'chips': 0,
+            'mult_add': 0,
+            'mult_x': 1.0,
+            'money': 0
+        }
 
         # --- SATIR KONTROLÜ ---
         for r in range(GRID_SIZE):
             if all(self.grid[r][c] is not None for c in range(GRID_SIZE)):
                 rows_to_clear.append(r)
-                # Satır dolu, renk analizi yap:
                 current_color = None
                 consecutive = 0
                 for c in range(GRID_SIZE):
                     val = self.grid[r][c]
-                    # Stone (Taş) rengini sayma, sadece renkli bloklar
                     if val != STONE_COLOR and val == current_color:
                         consecutive += 1
                     else:
-                        # Zincir bitti, kontrol et
                         if consecutive >= 3:
                             total_color_bonus += COLOR_MATCH_BONUS * consecutive
                             match_count += 1
                         current_color = val
                         consecutive = 1 if val != STONE_COLOR else 0
-                # Satır sonu kontrolü
                 if consecutive >= 3:
                     total_color_bonus += COLOR_MATCH_BONUS * consecutive
                     match_count += 1
@@ -130,7 +119,6 @@ class Grid:
         for c in range(GRID_SIZE):
             if all(self.grid[r][c] is not None for r in range(GRID_SIZE)):
                 cols_to_clear.append(c)
-                # Sütun dolu, renk analizi yap:
                 current_color = None
                 consecutive = 0
                 for r in range(GRID_SIZE):
@@ -147,14 +135,30 @@ class Grid:
                     total_color_bonus += COLOR_MATCH_BONUS * consecutive
                     match_count += 1
 
-        # Grid temizleme işlemi
+        # --- TEMİZLEME VE RÜN HESAPLAMA ---
+        cells_to_process = []
         for r in rows_to_clear:
-            for c in range(GRID_SIZE): self.grid[r][c] = None
+            for c in range(GRID_SIZE): cells_to_process.append((r, c))
         for c in cols_to_clear:
-            for r in range(GRID_SIZE): self.grid[r][c] = None
+            for r in range(GRID_SIZE): cells_to_process.append((r, c))
+            
+        unique_cells = set(cells_to_process)
+        
+        for r, c in unique_cells:
+            # Rün var mı?
+            rune = self.grid_runes[r][c]
+            if rune:
+                if rune.effect == 'add_chips': rune_bonuses['chips'] += rune.value
+                elif rune.effect == 'add_mult': rune_bonuses['mult_add'] += rune.value
+                elif rune.effect == 'multiply_mult': rune_bonuses['mult_x'] *= rune.value
+                elif rune.effect == 'add_money': rune_bonuses['money'] += rune.value
+            
+            # Temizle
+            self.grid[r][c] = None
+            self.grid_tags[r][c] = 'NONE'
+            self.grid_runes[r][c] = None
                 
-        # Dönen değerlere bonusları da ekliyoruz
-        return rows_to_clear, cols_to_clear, total_color_bonus, match_count
+        return rows_to_clear, cols_to_clear, total_color_bonus, match_count, rune_bonuses
 
     def draw(self, screen, offset_x=0, offset_y=0, theme_data=None, highlight_rows=[], highlight_cols=[]):
         if theme_data is None: theme_data = THEMES['NEON']
@@ -162,30 +166,25 @@ class Grid:
         style = theme_data['style']
         base_line_col = theme_data['line']
 
-        # 1. Zemini Temizle
         self.surface.fill(bg_col)
 
-        # --- 2. GRID ÇİZGİLERİ ---
-        # Sadece patlama olduğunda pulse_intensity yüksek olur, diğer zamanlar 0'dır.
         current_line_col = (
             min(255, base_line_col[0] + self.pulse_intensity),
             min(255, base_line_col[1] + self.pulse_intensity),
             min(255, base_line_col[2] + self.pulse_intensity)
         )
 
-        # Dikey çizgiler
+        # Çizgiler
         for i in range(GRID_SIZE + 1):
             x = i * TILE_SIZE
             width = 3 if (i == 0 or i == GRID_SIZE) else 1
             pygame.draw.line(self.surface, current_line_col, (x, 0), (x, GRID_HEIGHT), width)
-
-        # Yatay çizgiler
         for i in range(GRID_SIZE + 1):
             y = i * TILE_SIZE
             width = 3 if (i == 0 or i == GRID_SIZE) else 1
             pygame.draw.line(self.surface, current_line_col, (0, y), (GRID_WIDTH, y), width)
 
-        # --- 3. BLOKLAR VE İÇERİK ---
+        # Highlight
         if highlight_rows or highlight_cols:
             highlight_surface = pygame.Surface((GRID_WIDTH, GRID_HEIGHT), pygame.SRCALPHA)
             for r in highlight_rows:
@@ -196,6 +195,7 @@ class Grid:
                 pygame.draw.rect(highlight_surface, (255, 255, 255, 60), rect)
             self.surface.blit(highlight_surface, (0,0))
 
+        # Bloklar
         for row in range(GRID_SIZE):
             for col in range(GRID_SIZE):
                 x = col * TILE_SIZE
@@ -231,6 +231,12 @@ class Grid:
                         elif style == 'flat':
                             pastel = ((cell_color[0]+255)//2, (cell_color[1]+255)//2, (cell_color[2]+255)//2)
                             pygame.draw.rect(self.surface, pastel, rect, border_radius=15)
+                        
+                        # RÜN İKONU (Grid üzerinde)
+                        rune = self.grid_runes[row][col]
+                        if rune:
+                            pygame.draw.circle(self.surface, (0,0,0,100), rect.center, 6)
+                            pygame.draw.circle(self.surface, rune.color, rect.center, 4)
 
         draw_rect = self.rect.move(offset_x, offset_y)
         border_thickness = 3 + int(self.border_pulse)

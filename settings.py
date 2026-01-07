@@ -16,6 +16,10 @@ PLAY_AREA_H = VIRTUAL_H
 TOTEM_ICON_SIZE = 40
 HAND_BG_HEIGHT = 90
 
+# --- MENÜ AYARLARI (EKSİK OLANLAR EKLENDİ) ---
+LOGO_FILES = ["1.jpg", "2.jpg", "3.jpg", "4.jpg", "5.jpg", "6.jpg", "7.jpg"]
+MAX_MENU_BLOCKS = 15
+
 # --- GRID ---
 TILE_SIZE = 30 
 GRID_SIZE = 8

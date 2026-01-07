@@ -1,7 +1,7 @@
 # block.py
 import pygame
 import math
-import random # EKLENDİ
+import random 
 from settings import *
 
 def lerp(start, end, amount):
@@ -22,6 +22,9 @@ class Block:
             self.color = BLOCK_TAG_COLORS[self.tag]
         else:
             self.color = self.base_color
+        
+        # YENİ: RÜN SİSTEMİ
+        self.rune = None  # Bloğa takılı olan Rün objesi
         
         # GOLD bloklarda pulse efekti için
         self.glow_pulse = 0.0
@@ -179,6 +182,20 @@ class Block:
                          c = (*self.color, alpha) if alpha < 255 else self.color
                          pygame.draw.rect(temp_surface, c, rect)
                          pygame.draw.rect(temp_surface, (0,0,0, alpha) if alpha < 255 else (0,0,0), rect, 2)
+                         
+        # --- RÜN ÇİZİMİ (Bloğun merkezine) ---
+        if self.rune and not is_ghost:
+            cx = center_x
+            cy = center_y
+            rune_radius = int(14 * current_scale)
+            # Rün arka planı
+            pygame.draw.circle(temp_surface, (20, 20, 30), (cx, cy), rune_radius)
+            pygame.draw.circle(temp_surface, self.rune.color, (cx, cy), rune_radius, 2)
+            # Rün harfi
+            font = pygame.font.SysFont("Arial", int(18 * current_scale), bold=True)
+            txt = font.render(self.rune.icon, True, self.rune.color)
+            txt_rect = txt.get_rect(center=(cx, cy))
+            temp_surface.blit(txt, txt_rect)
 
         # Döndür ve Çiz
         if current_angle != 0:
