@@ -123,7 +123,9 @@ class BossAtmosphere:
         1.0: Çok yoğun kırmızı/karanlık atmosfer
         """
         if intensity > 0:
-            alpha = int(intensity * 100) # Maksimum opaklık 100
+            # Cap the alpha to a maximum of 80 (out of 255) to keep game visible
+            # intensity goes 0.0 to 1.0, alpha goes 0 to 80
+            alpha = min(80, int(intensity * 100))
             self.vignette_surface.set_alpha(alpha)
             surface.blit(self.vignette_surface, (0, 0))
 

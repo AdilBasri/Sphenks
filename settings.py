@@ -2,10 +2,16 @@
 import pygame
 
 # --- EKRAN AYARLARI ---
+# Native resolution for the game
 VIRTUAL_W = 850
 VIRTUAL_H = 480 
 FPS = 60
 TITLE = "SPHENKS: ROGUELIKE"
+
+# --- WINDOW SETTINGS (same as native resolution - no virtual surface intermediary) ---
+USE_FULLSCREEN = False  # Default to windowed mode
+WINDOW_W = 850  # Same as VIRTUAL_W
+WINDOW_H = 480  # Same as VIRTUAL_H
 
 # --- SIDEBAR & LAYOUT ---
 SIDEBAR_WIDTH = 190
@@ -92,9 +98,91 @@ STATE_ROUND_SELECT = 'round_select'
 STATE_PLAYING = 'playing'
 STATE_SCORING = 'scoring' 
 STATE_SHOP = 'shop'
+STATE_DEBT = 'state_debt'
+STATE_COLLECTION = 'state_collection'
+STATE_SETTINGS = 'state_settings'
 STATE_LEVEL_COMPLETE = 'level_complete'
 STATE_GAME_OVER = 'game_over'
 STATE_PAUSE = 'pause'
+
+# --- SETTINGS ---
+RESOLUTIONS = [
+    (850, 480),
+    (1280, 720),
+    (1920, 1080)
+]
+
+# --- DEBT SCREEN ---
+PHARAOH_QUOTES = [
+    "Work harder, slave.",
+    "Your debt remains.",
+    "The pyramid waits.",
+    "Freedom is expensive.",
+    "The sands remember all debts.",
+    "Your labor pleases the gods.",
+    "Only fools dream of freedom.",
+    "The debt is eternal."
+]
+
+# --- COLLECTIBLES ---
+COLLECTIBLES = [
+    {
+        'id': 'broken_vase',
+        'name': 'Broken Vase',
+        'unlock_at': 5000,
+        'desc': 'A shattered vessel from the old kingdom.',
+        'icon': '🏺'
+    },
+    {
+        'id': 'sphinx',
+        'name': 'Sphinx Head',
+        'unlock_at': 10000,
+        'desc': 'A crumbled relic.',
+        'icon': '🗿'
+    },
+    {
+        'id': 'scarab',
+        'name': 'Golden Scarab',
+        'unlock_at': 25000,
+        'desc': 'Sacred beetle of transformation.',
+        'icon': '🪲'
+    },
+    {
+        'id': 'ankh',
+        'name': 'Ankh of Life',
+        'unlock_at': 50000,
+        'desc': 'Symbol of eternal life.',
+        'icon': '☥'
+    },
+    {
+        'id': 'eye_ra',
+        'name': 'Eye of Ra',
+        'unlock_at': 100000,
+        'desc': 'It sees all.',
+        'icon': '👁'
+    },
+    {
+        'id': 'crown',
+        'name': 'Pharaoh Crown',
+        'unlock_at': 250000,
+        'desc': 'The double crown of upper and lower.',
+        'icon': '👑'
+    },
+    {
+        'id': 'scepter',
+        'name': 'Royal Scepter',
+        'unlock_at': 500000,
+        'desc': 'Power flows through this staff.',
+        'icon': '🪄'
+    },
+    {
+        'id': 'freedom',
+        'name': 'FREEDOM',
+        'unlock_at': 1000000,
+        'desc': 'You are free. The debt is paid.',
+        'icon': '✨'
+    }
+]
 
 # --- BLOKLAR ---
 SHAPES = {

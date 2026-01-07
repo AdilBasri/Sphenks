@@ -27,3 +27,8 @@ class AudioManager:
     def play(self, name):
         if name in self.sounds:
             self.sounds[name].play()
+    
+    def set_volume(self, volume):
+        """Set volume for all sounds (0.0 to 1.0)"""
+        for sound in self.sounds.values():
+            sound.set_volume(volume)

@@ -5,6 +5,7 @@ import random
 import math
 import os
 from settings import *
+from settings import USE_FULLSCREEN, WINDOW_W, WINDOW_H, STATE_DEBT, PHARAOH_QUOTES, COLLECTIBLES, STATE_COLLECTION, STATE_SETTINGS, RESOLUTIONS
 from grid import Grid
 from block import Block
 from effects import ParticleSystem, BossAtmosphere
@@ -12,12 +13,35 @@ from totems import Totem, TotemLogic, TOTEM_DATA, OMEGA_KEYS
 from runes import Rune, RUNE_DATA
 from ui import UIManager       
 from audio import AudioManager 
-from crt import CRTManager 
+from crt import CRTManager
+from save_data import SaveManager 
 
 class Game:
     def __init__(self):
+        # Center window on screen
+        os.environ['SDL_VIDEO_CENTERED'] = '1'
+        
         pygame.init()
-        self.screen = pygame.display.set_mode((VIRTUAL_W, VIRTUAL_H), pygame.SCALED | pygame.FULLSCREEN)
+        
+        # Load save data FIRST (before window creation) to check fullscreen preference
+        self.save_manager = SaveManager()
+        saved_settings = self.save_manager.data.get('settings', {})
+        saved_fullscreen = saved_settings.get('fullscreen', False)
+        
+        # --- EKRAN AYARLARI ---
+        # Always start in windowed mode (SCALED | RESIZABLE only)
+        # pygame.SCALED automatically scales to window size without manual virtual surface
+        # pygame.RESIZABLE allows window resizing
+        # vsync=1 prevents screen tearing
+        flags = pygame.SCALED | pygame.RESIZABLE
+        
+        self.screen = pygame.display.set_mode((VIRTUAL_W, VIRTUAL_H), flags, vsync=1)
+        self.fullscreen = False
+        
+        # Apply fullscreen AFTER initialization if saved preference was True
+        # This "late toggle" avoids Mac Retina scaling glitches
+        if saved_fullscreen:
+            self.toggle_fullscreen()
         
         self.w = VIRTUAL_W
         self.h = VIRTUAL_H
@@ -30,6 +54,10 @@ class Game:
         self.ui = UIManager()
         self.particle_system = ParticleSystem()
         self.high_score = self.load_high_score()
+        
+        # Load save data and apply settings
+        self.save_data = self.save_manager.get_data()
+        self._apply_saved_settings()
         
         self.grid = Grid()
         
@@ -97,6 +125,18 @@ class Game:
         self.void_count = BASE_VOID_COUNT
         self.is_edge_placement = False
         self.last_placed_block_tag = 'NONE'
+        
+        # --- DEBT SCREEN VARIABLES ---
+        self.debt_old_value = 0
+        self.debt_displayed_value = 0
+        self.debt_animation_timer = 0
+        self.debt_payment_amount = 0
+        self.debt_shake_intensity = 0
+        self.debt_scale = 1.0
+        self.debt_quote_index = 0
+        self.debt_quote_char_index = 0
+        self.debt_quote_timer = 0
+        self.newly_unlocked_items = []  # Items unlocked in this debt screen
 
     def get_blind_target(self, round_num):
         base_target = 300 * (self.ante ** 1.3)
@@ -195,6 +235,33 @@ class Game:
                 self.save_high_score()
 
     def next_level(self):
+        # Calculate debt payment (based on round score)
+        self.debt_payment_amount = self.score
+        
+        # Save old debt value for animation
+        save_data = self.save_manager.get_data()
+        self.debt_old_value = save_data['total_debt'] - save_data['debt_paid']
+        
+        # Pay the debt
+        result = self.save_manager.pay_debt(self.debt_payment_amount)
+        self.debt_displayed_value = self.debt_old_value  # Start animation from old value
+        
+        # Initialize debt screen animation
+        self.debt_animation_timer = 0
+        self.debt_shake_intensity = 0
+        self.debt_scale = 1.0
+        self.debt_quote_index = random.randint(0, len(PHARAOH_QUOTES) - 1)
+        self.debt_quote_char_index = 0
+        self.debt_quote_timer = 0
+        self.newly_unlocked_items = []  # Reset newly unlocked items
+        if hasattr(self, '_unlocks_checked'):
+            delattr(self, '_unlocks_checked')  # Reset unlock check flag
+        
+        # Transition to debt screen
+        self.state = STATE_DEBT
+        
+    def continue_from_debt(self):
+        """Called when player clicks continue on debt screen"""
         if self.round < 3:
             self.round += 1
         else:
@@ -211,6 +278,67 @@ class Game:
                 self.force_omega_shop = True
                 
         self.state = STATE_ROUND_SELECT
+    
+    def _check_collectible_unlocks(self):
+        """Check if any collectibles were unlocked by the recent debt payment"""
+        save_data = self.save_manager.get_data()
+        total_paid = save_data['debt_paid']
+        old_paid = total_paid - self.debt_payment_amount
+        
+        self.newly_unlocked_items = []
+        
+        for item in COLLECTIBLES:
+            # Check if this payment crossed the unlock threshold
+            if old_paid < item['unlock_at'] <= total_paid:
+                # New unlock!
+                if not self.save_manager.is_unlocked(item['id']):
+                    self.save_manager.unlock_item(item['id'])
+                    self.newly_unlocked_items.append(item)
+                    # Play sound effect if available
+                    if hasattr(self.audio, 'play'):
+                        self.audio.play('clear')  # Use existing sound for now
+    
+    def apply_settings(self):
+        """Apply settings from temp_settings to game and save to file"""
+        if not hasattr(self, 'temp_settings'):
+            return
+        
+        # Get current save data
+        save_data = self.save_manager.get_data()
+        
+        # Update settings in save data
+        save_data['settings']['fullscreen'] = self.temp_settings['fullscreen']
+        save_data['settings']['volume'] = self.temp_settings['volume']
+        
+        # Apply resolution
+        res_index = self.temp_settings['resolution_index']
+        resolution = RESOLUTIONS[res_index]
+        
+        # Apply display mode
+        if self.temp_settings['fullscreen']:
+            self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+        else:
+            self.screen = pygame.display.set_mode(resolution)
+        
+        # Apply volume
+        if hasattr(self.audio, 'set_volume'):
+            self.audio.set_volume(self.temp_settings['volume'])
+        
+        # Save to file
+        self.save_manager.save_data(save_data)
+        
+        # Clean up temp settings
+        delattr(self, 'temp_settings')
+    
+    def _apply_saved_settings(self):
+        """Apply settings from save file on startup (volume only - screen already set)"""
+        save_data = self.save_manager.get_data()
+        settings = save_data.get('settings', {})
+        
+        # Apply volume
+        volume = settings.get('volume', 0.5)
+        if hasattr(self.audio, 'set_volume'):
+            self.audio.set_volume(volume)
 
     def position_blocks_in_hand(self):
         area_center_x = SIDEBAR_WIDTH + (PLAY_AREA_W // 2)
@@ -285,21 +413,64 @@ class Game:
             if r in self.shop_runes: self.shop_runes.remove(r)
             self.audio.play('select')
 
+    def toggle_fullscreen(self):
+        """Toggle between windowed and fullscreen mode"""
+        self.fullscreen = not self.fullscreen
+        
+        try:
+            # Try using pygame's toggle_fullscreen method (Pygame 2.0+)
+            pygame.display.toggle_fullscreen()
+        except AttributeError:
+            # Fallback for older pygame versions: recreate display with new flags
+            flags = pygame.SCALED | pygame.RESIZABLE
+            if self.fullscreen:
+                flags |= pygame.FULLSCREEN
+            self.screen = pygame.display.set_mode((VIRTUAL_W, VIRTUAL_H), flags, vsync=1)
+        
+        # Save fullscreen preference immediately
+        self.save_manager.data['settings']['fullscreen'] = self.fullscreen
+        self.save_manager.save_data()
+
     def handle_events(self):
-        mx, my = pygame.mouse.get_pos()
+        # Get mouse position directly - no coordinate conversion needed
+        self.mouse_x, self.mouse_y = pygame.mouse.get_pos()
+        mx, my = self.mouse_x, self.mouse_y
+        
         for event in pygame.event.get():
             if event.type == pygame.QUIT: sys.exit()
+            
+            # Handle window resize with automatic scaling
+            if event.type == pygame.VIDEORESIZE:
+                # pygame.SCALED automatically handles coordinate mapping
+                pygame.display.flip()
+            
+            # Handle fullscreen toggle with F or F11 key
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_f or event.key == pygame.K_F11:
+                    self.toggle_fullscreen()
+            
             if self.state == STATE_SCORING: return 
 
             if self.state == STATE_MENU:
-                if hasattr(self.ui, 'handle_menu_interaction'):
-                    self.ui.handle_menu_interaction(event)
-                if event.type == pygame.MOUSEBUTTONDOWN:
+                # Handle menu button clicks - only on MOUSEBUTTONUP (not MOUSEBUTTONDOWN)
+                # This prevents double-click issues
+                if event.type == pygame.MOUSEBUTTONUP:
                     if hasattr(self.ui, 'menu_buttons'):
                         for rect, text in self.ui.menu_buttons:
                             if rect.collidepoint(mx, my):
-                                if text == "PLAY": self.start_new_game()
-                                elif text == "EXIT": sys.exit()
+                                if text == "PLAY": 
+                                    self.start_new_game()
+                                elif text == "SETTINGS":
+                                    self.audio.play('select')
+                                    # Clean temp settings when entering
+                                    if hasattr(self, 'temp_settings'):
+                                        delattr(self, 'temp_settings')
+                                    self.state = STATE_SETTINGS
+                                elif text == "COLLECTION":
+                                    self.audio.play('select')
+                                    self.state = STATE_COLLECTION
+                                elif text == "EXIT": 
+                                    sys.exit()
 
             elif self.state == STATE_ROUND_SELECT:
                 if event.type == pygame.MOUSEBUTTONDOWN:
@@ -532,6 +703,75 @@ class Game:
                         if r.rect and r.rect.collidepoint(mx, my): self.buy_rune(r)
                         
                     if mx > self.w - 150 and my > self.h - 50: self.next_level()
+            
+            elif self.state == STATE_DEBT:
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    # Check if continue button was clicked (handled by UI)
+                    if hasattr(self.ui, 'debt_continue_button'):
+                        if self.ui.debt_continue_button.collidepoint(mx, my):
+                            self.audio.play('select')
+                            self.continue_from_debt()
+                            self.state = STATE_ROUND_SELECT
+            
+            elif self.state == STATE_COLLECTION:
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    # Check if back button was clicked
+                    if hasattr(self.ui, 'collection_back_button'):
+                        if self.ui.collection_back_button.collidepoint(mx, my):
+                            self.audio.play('select')
+                            self.state = STATE_MENU
+                
+                elif event.type == pygame.MOUSEWHEEL:
+                    # Handle collection scroll
+                    if event.y > 0:  # Scroll up
+                        self.ui.collection_scroll_y -= 30
+                    elif event.y < 0:  # Scroll down
+                        self.ui.collection_scroll_y += 30
+                    
+                    # Clamp scroll value (max scroll will be calculated in draw_collection)
+                    self.ui.collection_scroll_y = max(0, self.ui.collection_scroll_y)
+            
+            elif self.state == STATE_SETTINGS:
+                if event.type == pygame.MOUSEBUTTONDOWN and hasattr(self.ui, 'settings_buttons'):
+                    btns = self.ui.settings_buttons
+                    
+                    # Fullscreen toggle
+                    if 'fullscreen' in btns and btns['fullscreen'].collidepoint(mx, my):
+                        self.temp_settings['fullscreen'] = not self.temp_settings['fullscreen']
+                        self.audio.play('select')
+                    
+                    # Resolution arrows
+                    elif 'res_left' in btns and btns['res_left'].collidepoint(mx, my):
+                        self.temp_settings['resolution_index'] = (self.temp_settings['resolution_index'] - 1) % len(RESOLUTIONS)
+                        self.audio.play('select')
+                    
+                    elif 'res_right' in btns and btns['res_right'].collidepoint(mx, my):
+                        self.temp_settings['resolution_index'] = (self.temp_settings['resolution_index'] + 1) % len(RESOLUTIONS)
+                        self.audio.play('select')
+                    
+                    # Save button
+                    elif 'save' in btns and btns['save'].collidepoint(mx, my):
+                        self.apply_settings()
+                        self.audio.play('clear')
+                        self.state = STATE_MENU
+                    
+                    # Cancel button
+                    elif 'back' in btns and btns['back'].collidepoint(mx, my):
+                        # Discard temp settings
+                        if hasattr(self, 'temp_settings'):
+                            delattr(self, 'temp_settings')
+                        self.audio.play('select')
+                        self.state = STATE_MENU
+                
+                # Volume slider dragging
+                elif event.type == pygame.MOUSEMOTION:
+                    if pygame.mouse.get_pressed()[0] and hasattr(self.ui, 'settings_buttons'):
+                        slider = self.ui.settings_buttons.get('volume_slider')
+                        if slider and slider.collidepoint(mx, my):
+                            # Calculate volume from mouse position
+                            relative_x = mx - slider.x
+                            volume = max(0.0, min(1.0, relative_x / slider.width))
+                            self.temp_settings['volume'] = volume
 
             elif self.state == STATE_GAME_OVER:
                 if event.type == pygame.MOUSEBUTTONDOWN: self.state = STATE_MENU; self.init_game_session_data()
@@ -548,11 +788,48 @@ class Game:
         
         if self.state == STATE_PLAYING:
             for b in self.blocks: b.update()
-            # Rün Sürükleme
+            # Rün Sürükleme (Sanal koordinatlara çevir)
             if self.held_rune and self.held_rune.dragging:
-                mx, my = pygame.mouse.get_pos()
-                self.held_rune.x = mx
-                self.held_rune.y = my
+                mx, my = self.crt.get_virtual_mouse_pos()
+                if mx is not None and my is not None:
+                    self.held_rune.x = mx
+                    self.held_rune.y = my
+        
+        elif self.state == STATE_DEBT:
+            # Debt screen animation logic
+            self.debt_animation_timer += 1
+            
+            # Countdown animation (fast)
+            if self.debt_displayed_value > (self.debt_old_value - self.debt_payment_amount):
+                decrement = max(1, self.debt_payment_amount // 60)  # Complete in ~60 frames
+                self.debt_displayed_value -= decrement
+                if self.debt_displayed_value < (self.debt_old_value - self.debt_payment_amount):
+                    self.debt_displayed_value = self.debt_old_value - self.debt_payment_amount
+                
+                # Shake effect while counting
+                self.debt_shake_intensity = random.randint(-2, 2)
+            else:
+                # Countdown finished
+                self.debt_shake_intensity = 0
+                
+                # Check for unlocks (only once, right when countdown finishes)
+                if self.debt_animation_timer == 60 and not hasattr(self, '_unlocks_checked'):
+                    self._check_collectible_unlocks()
+                    self._unlocks_checked = True
+                
+                # Pop effect (happens once)
+                if self.debt_animation_timer == 61:  # Right after countdown
+                    self.debt_scale = 1.3  # Scale up
+                elif self.debt_animation_timer > 61:
+                    # Scale back down smoothly
+                    self.debt_scale = max(1.0, self.debt_scale - 0.02)
+            
+            # Typewriter effect for quote
+            self.debt_quote_timer += 1
+            if self.debt_quote_timer >= 3:  # Add character every 3 frames
+                self.debt_quote_timer = 0
+                if self.debt_quote_char_index < len(PHARAOH_QUOTES[self.debt_quote_index]):
+                    self.debt_quote_char_index += 1
             
         elif self.state == STATE_SCORING:
             self.scoring_timer += 1
@@ -563,12 +840,19 @@ class Game:
                 if self.score >= self.level_target and not self.blocks and self.void_count == 0: self.check_round_end()
 
     def draw(self):
+        # All rendering goes directly to screen
         self.ui.draw_bg(self.screen)
         
         if self.state == STATE_MENU:
             self.ui.draw_menu(self.screen, self.high_score)
         elif self.state == STATE_ROUND_SELECT:
             self.ui.draw_round_select(self.screen, self)
+        elif self.state == STATE_DEBT:
+            self.ui.draw_debt_screen(self.screen, self)
+        elif self.state == STATE_COLLECTION:
+            self.ui.draw_collection(self.screen, self)
+        elif self.state == STATE_SETTINGS:
+            self.ui.draw_settings(self.screen, self)
         else:
             boss_shake_x, boss_shake_y = self.particle_system.atmosphere.get_shake_offset()
             normal_shake_x = random.randint(-self.screen_shake, self.screen_shake) if self.screen_shake > 0 else 0
@@ -602,8 +886,9 @@ class Game:
             
             if self.active_boss_effect != 'The Haze': 
                 if self.held_block and self.held_block.dragging:
-                    cur_x = pygame.mouse.get_pos()[0] - self.held_block.offset_x
-                    cur_y = pygame.mouse.get_pos()[1] - self.held_block.offset_y
+                    # Get mouse position directly
+                    cur_x = self.mouse_x - self.held_block.offset_x
+                    cur_y = self.mouse_y - self.held_block.offset_y
                     check_x = cur_x + (TILE_SIZE / 2); check_y = cur_y + (TILE_SIZE / 2)
                     gr, gc = self.get_grid_pos(check_x, check_y)
                     if gr is not None and gc is not None:
@@ -617,7 +902,6 @@ class Game:
             
             for b in self.blocks:
                 if b != self.held_block: b.draw(self.screen, 0, 0, 0.8, 255, theme['style'])
-            if self.held_block: self.held_block.draw(self.screen, 0, 0, 1.0, 255, theme['style'])
             
             # --- SÜRÜKLENEN RÜN ÇİZİMİ (Grid ve blokların ÜSTÜnde - Z-Index Fix) ---
             if self.state == STATE_PLAYING and self.held_rune and self.held_rune.dragging:
@@ -647,7 +931,13 @@ class Game:
             # Shop ekranı kendi tooltip'ini çiziyor, diğer durumlar için bu katmanı kullan
             if self.state != STATE_SHOP:
                 self.ui.draw_final_tooltip_layer(self.screen, self)
+            
+            # --- SÜRÜKLENEN BLOK ÇİZİMİ (En son çizilir - Tüm nesnelerin üstünde) ---
+            # Held block is drawn last so it appears on top of everything
+            if self.held_block: 
+                self.held_block.draw(self.screen, 0, 0, 1.0, 255, theme['style'])
         
+        # Apply CRT effects to screen
         self.crt.draw(self.screen)
         pygame.display.flip()
 

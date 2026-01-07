@@ -207,6 +207,9 @@ class UIManager:
         self.pending_tooltip = None
         self.shop_tooltip = None
         
+        # YENİ: Collection screen scrolling
+        self.collection_scroll_y = 0
+        
         self.load_bg_assets()
         self.load_totem_assets()
         
@@ -606,25 +609,45 @@ class UIManager:
             
         # 3. Logo (S P H E N K S) - ARTIK FİZİKLİ!
         cx, cy = VIRTUAL_W//2, VIRTUAL_H//2
+        center_y = VIRTUAL_H // 2
+        
         if self.title_letters:
             for l in self.title_letters:
                 l.draw(surface)
         else:
             # Fallback
             title = self.title_font.render("SPHENKS", True, ACCENT_COLOR)
-            surface.blit(title, title.get_rect(center=(cx, cy - 80)))
+            surface.blit(title, title.get_rect(center=(cx, center_y - 120)))
 
-        # 4. Butonlar
-        self.menu_buttons = [] 
-        btns = [("PLAY", 20), ("EXIT", 90)]
-        base_y = cy + 40
-        for text, offset in btns:
-            rect = pygame.Rect(0, 0, 220, 55)
-            rect.center = (cx, base_y + offset)
+        # 4. Butonlar - Dynamically center vertically with proper spacing
+        # Position buttons relative to screen center, not absolute Y values
+        self.menu_buttons = []
+        btns = [("PLAY", 0), ("SETTINGS", 1), ("COLLECTION", 2), ("EXIT", 3)]
+        
+        button_h = 55
+        button_gap = 15
+        total_buttons_height = len(btns) * button_h + (len(btns) - 1) * button_gap
+        
+        # Center buttons vertically around the middle of the screen
+        # Keep good spacing from logo above and bottom edge
+        start_y = center_y + 40  # Start 40 pixels below center
+        
+        for text, idx in btns:
+            rect = pygame.Rect(0, 0, 220, button_h)
+            y = start_y + idx * (button_h + button_gap)
+            
+            # Ensure button stays on screen
+            if y + button_h > VIRTUAL_H - 40:
+                # If button would overflow, shift entire menu up
+                start_y = VIRTUAL_H - 40 - (len(btns) * button_h + (len(btns) - 1) * button_gap)
+                y = start_y + idx * (button_h + button_gap)
+            
+            rect.center = (cx, y)
+            
             col = (40, 35, 50)
             border_col = (100, 100, 100)
-            if rect.collidepoint(pygame.mouse.get_pos()): 
-                col = (60, 50, 80); border_col = ACCENT_COLOR
+            # NOTE: Hover detection uses virtual coordinates from game.py now
+            # so this collidepoint won't work correctly - it's just a fallback
             pygame.draw.rect(surface, col, rect, border_radius=12)
             pygame.draw.rect(surface, border_col, rect, 2, border_radius=12)
             txt = self.font_bold.render(text, True, (255,255,255))
@@ -930,6 +953,457 @@ class UIManager:
         surface.blit(t, t.get_rect(center=(cx, cy - 50)))
         surface.blit(s, s.get_rect(center=(cx, cy + 10)))
         surface.blit(r, r.get_rect(center=(cx, cy + 60)))
+
+    def draw_debt_screen(self, surface, game):
+        """Dramatic debt repayment screen with animations"""
+        from settings import PHARAOH_QUOTES
+        
+        # Black background with fade
+        alpha = min(255, game.debt_animation_timer * 10)
+        overlay = pygame.Surface((VIRTUAL_W, VIRTUAL_H), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, alpha))
+        surface.blit(overlay, (0, 0))
+        
+        cx, cy = VIRTUAL_W // 2, VIRTUAL_H // 2
+        
+        # Payment amount indicator (top)
+        if game.debt_animation_timer > 10:
+            payment_text = self.font_bold.render(f"PAYMENT: -{game.debt_payment_amount:,}", True, (100, 255, 100))
+            surface.blit(payment_text, payment_text.get_rect(center=(cx, 60)))
+        
+        # Debt number with shake and scale
+        if game.debt_animation_timer > 20:
+            is_animating = game.debt_displayed_value > (game.debt_old_value - game.debt_payment_amount)
+            
+            # Determine color
+            if is_animating:
+                color = (255, 255, 255)
+            else:
+                # Flash red when finished
+                if game.debt_animation_timer < 80:
+                    color = (255, 50, 50)
+                else:
+                    color = (255, 255, 255)
+            
+            # Create debt text with scale
+            debt_str = f"{int(game.debt_displayed_value):,}"
+            debt_font_size = int(80 * game.debt_scale)
+            
+            # Use existing title font as base, scaled
+            debt_surface = self.title_font.render(debt_str, True, color)
+            
+            # Scale the surface
+            if game.debt_scale != 1.0:
+                original_size = debt_surface.get_size()
+                new_size = (int(original_size[0] * game.debt_scale), int(original_size[1] * game.debt_scale))
+                debt_surface = pygame.transform.scale(debt_surface, new_size)
+            
+            # Apply shake
+            shake_x = game.debt_shake_intensity
+            shake_y = game.debt_shake_intensity
+            
+            surface.blit(debt_surface, debt_surface.get_rect(center=(cx + shake_x, cy - 40 + shake_y)))
+            
+            # "TOTAL DEBT" label
+            label = self.font_bold.render("TOTAL DEBT", True, (150, 150, 150))
+            surface.blit(label, label.get_rect(center=(cx, cy - 120)))
+        
+        # Pharaoh quote with typewriter effect (bottom)
+        if game.debt_animation_timer > 90:
+            quote = PHARAOH_QUOTES[game.debt_quote_index]
+            displayed_quote = quote[:game.debt_quote_char_index]
+            
+            quote_text = self.font_reg.render(displayed_quote, True, (200, 150, 50))
+            surface.blit(quote_text, quote_text.get_rect(center=(cx, cy + 100)))
+        
+        # Unlock notification (if any items were unlocked)
+        if game.debt_animation_timer > 80 and hasattr(game, 'newly_unlocked_items') and game.newly_unlocked_items:
+            for i, item in enumerate(game.newly_unlocked_items):
+                unlock_y = cy + 50 + (i * 30)
+                unlock_text = self.font_bold.render(f"UNLOCKED: {item['name']}", True, (255, 215, 0))
+                surface.blit(unlock_text, unlock_text.get_rect(center=(cx, unlock_y)))
+                
+                desc_text = self.font_small.render("Keep working!", True, (200, 200, 200))
+                surface.blit(desc_text, desc_text.get_rect(center=(cx, unlock_y + 20)))
+        
+        # Continue button (bottom right) - only show after animation completes
+        if game.debt_animation_timer > 120:
+            btn_w, btn_h = 150, 50
+            btn_x = VIRTUAL_W - btn_w - 30
+            btn_y = VIRTUAL_H - btn_h - 30
+            
+            btn_rect = pygame.Rect(btn_x, btn_y, btn_w, btn_h)
+            self.debt_continue_button = btn_rect  # Store for event handling
+            
+            mx, my = pygame.mouse.get_pos()
+            hover = btn_rect.collidepoint(mx, my)
+            
+            btn_color = (80, 60, 100) if hover else (50, 40, 70)
+            border_color = ACCENT_COLOR if hover else (100, 100, 100)
+            
+            pygame.draw.rect(surface, btn_color, btn_rect, border_radius=8)
+            pygame.draw.rect(surface, border_color, btn_rect, 2, border_radius=8)
+            
+            btn_text = self.font_bold.render("CONTINUE", True, (255, 255, 255))
+            surface.blit(btn_text, btn_text.get_rect(center=btn_rect.center))
+
+    def draw_collection(self, surface, game):
+        """Collection screen showing unlocked items with scrolling support"""
+        from settings import COLLECTIBLES
+        
+        # Dark background
+        overlay = pygame.Surface((VIRTUAL_W, VIRTUAL_H), pygame.SRCALPHA)
+        overlay.fill((10, 10, 15, 250))
+        surface.blit(overlay, (0, 0))
+        
+        cx = VIRTUAL_W // 2
+        
+        # Title
+        title = self.title_font.render("COLLECTION", True, ACCENT_COLOR)
+        surface.blit(title, title.get_rect(center=(cx, 40)))
+        
+        # Progress indicator
+        save_data = game.save_manager.get_data()
+        total_paid = save_data['debt_paid']
+        total_debt = save_data['total_debt']
+        remaining = max(0, total_debt - total_paid)
+        unlocked_count = len([item for item in COLLECTIBLES if game.save_manager.is_unlocked(item['id'])])
+        
+        progress_text = self.font_bold.render(f"Unlocked: {unlocked_count}/{len(COLLECTIBLES)}", True, (255, 255, 255))
+        surface.blit(progress_text, progress_text.get_rect(center=(cx, 80)))
+        
+        debt_text = self.font_reg.render(f"Debt Paid: {total_paid:,} / {total_debt:,}", True, (200, 200, 200))
+        surface.blit(debt_text, debt_text.get_rect(center=(cx, 105)))
+        
+        # Grid of collectibles (2 columns, 4 rows = 8 items)
+        cols = 2
+        rows = 4
+        card_w = 180
+        card_h = 140
+        gap_x = 30
+        gap_y = 20
+        
+        # Calculate total content height
+        total_content_height = rows * card_h + (rows - 1) * gap_y
+        
+        # Scrolling area parameters
+        scroll_area_top = 140
+        scroll_area_height = VIRTUAL_H - scroll_area_top - 80  # Leave room for title and back button
+        
+        # Calculate max scroll (clamp so content doesn't scroll too far)
+        max_scroll = max(0, total_content_height - scroll_area_height)
+        
+        # Clamp scroll value
+        self.collection_scroll_y = max(0, min(self.collection_scroll_y, max_scroll))
+        
+        start_x = cx - (cols * card_w + (cols - 1) * gap_x) // 2
+        start_y = scroll_area_top - self.collection_scroll_y
+        
+        mx, my = pygame.mouse.get_pos()
+        
+        for i, item in enumerate(COLLECTIBLES):
+            row = i // cols
+            col = i % cols
+            
+            x = start_x + col * (card_w + gap_x)
+            y = start_y + row * (card_h + gap_y)
+            
+            # Only draw if visible on screen
+            if y + card_h < scroll_area_top or y > VIRTUAL_H - 80:
+                continue
+            
+            card_rect = pygame.Rect(x, y, card_w, card_h)
+            
+            is_unlocked = game.save_manager.is_unlocked(item['id'])
+            hover = card_rect.collidepoint(mx, my)
+            
+            # Card background
+            if is_unlocked:
+                bg_color = (40, 40, 50) if not hover else (50, 50, 65)
+                border_color = (100, 100, 100) if not hover else ACCENT_COLOR
+            else:
+                bg_color = (20, 20, 25)
+                border_color = (50, 50, 50)
+            
+            pygame.draw.rect(surface, bg_color, card_rect, border_radius=10)
+            pygame.draw.rect(surface, border_color, card_rect, 2, border_radius=10)
+            
+            if is_unlocked:
+                # Show icon (emoji)
+                icon_font = pygame.font.SysFont("Arial", 48)
+                icon_surface = icon_font.render(item['icon'], True, (255, 255, 255))
+                surface.blit(icon_surface, icon_surface.get_rect(center=(card_rect.centerx, card_rect.y + 40)))
+                
+                # Name
+                name_text = self.font_bold.render(item['name'], True, (255, 255, 255))
+                surface.blit(name_text, name_text.get_rect(center=(card_rect.centerx, card_rect.y + 85)))
+                
+                # Description
+                desc_lines = self._wrap_text(item['desc'], card_w - 20, self.font_small)
+                for j, line in enumerate(desc_lines):
+                    desc_surface = self.font_small.render(line, True, (150, 150, 150))
+                    surface.blit(desc_surface, desc_surface.get_rect(center=(card_rect.centerx, card_rect.y + 105 + j * 15)))
+            else:
+                # Locked silhouette
+                lock_icon = self.font_big.render("🔒", True, (80, 80, 80))
+                surface.blit(lock_icon, lock_icon.get_rect(center=(card_rect.centerx, card_rect.centery - 10)))
+                
+                # Unlock requirement
+                req_text = self.font_small.render(f"Pay {item['unlock_at']:,}", True, (100, 100, 100))
+                surface.blit(req_text, req_text.get_rect(center=(card_rect.centerx, card_rect.centery + 25)))
+        
+        # Draw scrollbar on the right side
+        if max_scroll > 0:
+            scrollbar_x = VIRTUAL_W - 20
+            scrollbar_w = 8
+            scrollbar_h = scroll_area_height
+            
+            # Background track
+            track_rect = pygame.Rect(scrollbar_x - scrollbar_w // 2, scroll_area_top, scrollbar_w, scrollbar_h)
+            pygame.draw.rect(surface, (40, 40, 50), track_rect, border_radius=4)
+            
+            # Scroll thumb (handle)
+            thumb_height = max(20, scrollbar_h * scrollbar_h // total_content_height)
+            thumb_y = scroll_area_top + (self.collection_scroll_y / max_scroll) * (scrollbar_h - thumb_height)
+            thumb_rect = pygame.Rect(scrollbar_x - scrollbar_w // 2, thumb_y, scrollbar_w, thumb_height)
+            
+            thumb_color = ACCENT_COLOR if thumb_rect.collidepoint(mx, my) else (100, 100, 100)
+            pygame.draw.rect(surface, thumb_color, thumb_rect, border_radius=4)
+        
+        # Back button
+        btn_w, btn_h = 120, 50
+        btn_x = 30
+        btn_y = VIRTUAL_H - btn_h - 30
+        
+        back_btn = pygame.Rect(btn_x, btn_y, btn_w, btn_h)
+        self.collection_back_button = back_btn
+        
+        hover_back = back_btn.collidepoint(mx, my)
+        btn_color = (80, 60, 100) if hover_back else (50, 40, 70)
+        border_color = ACCENT_COLOR if hover_back else (100, 100, 100)
+        
+        pygame.draw.rect(surface, btn_color, back_btn, border_radius=8)
+        pygame.draw.rect(surface, border_color, back_btn, 2, border_radius=8)
+        
+        back_text = self.font_bold.render("BACK", True, (255, 255, 255))
+        surface.blit(back_text, back_text.get_rect(center=back_btn.center))
+    
+    def _wrap_text(self, text, max_width, font):
+        """Helper to wrap text into multiple lines"""
+        words = text.split(' ')
+        lines = []
+        current_line = []
+        
+        for word in words:
+            test_line = ' '.join(current_line + [word])
+            if font.size(test_line)[0] <= max_width:
+                current_line.append(word)
+            else:
+                if current_line:
+                    lines.append(' '.join(current_line))
+                current_line = [word]
+        
+        if current_line:
+            lines.append(' '.join(current_line))
+        
+        return lines[:2]  # Max 2 lines
+
+    def draw_settings(self, surface, game):
+        """Settings screen with resolution, fullscreen, and volume controls"""
+        from settings import RESOLUTIONS
+        
+        # Dark background
+        overlay = pygame.Surface((VIRTUAL_W, VIRTUAL_H), pygame.SRCALPHA)
+        overlay.fill((10, 10, 15, 250))
+        surface.blit(overlay, (0, 0))
+        
+        cx = VIRTUAL_W // 2
+        cy = VIRTUAL_H // 2
+        
+        # Title
+        title = self.title_font.render("SETTINGS", True, ACCENT_COLOR)
+        surface.blit(title, title.get_rect(center=(cx, 40)))
+        
+        # Panel
+        panel_w = 500
+        panel_h = 350
+        panel_x = cx - panel_w // 2
+        panel_y = 100
+        
+        panel_rect = pygame.Rect(panel_x, panel_y, panel_w, panel_h)
+        pygame.draw.rect(surface, (30, 30, 40), panel_rect, border_radius=15)
+        pygame.draw.rect(surface, (100, 100, 100), panel_rect, 2, border_radius=15)
+        
+        # Get current settings
+        save_data = game.save_manager.get_data()
+        settings = save_data['settings']
+        
+        # Track temp settings if not already initialized
+        if not hasattr(game, 'temp_settings'):
+            game.temp_settings = {
+                'fullscreen': settings.get('fullscreen', False),
+                'volume': settings.get('volume', 0.5),
+                'resolution_index': self._get_resolution_index(game)
+            }
+        
+        mx, my = pygame.mouse.get_pos()
+        
+        # --- FULLSCREEN TOGGLE ---
+        y_offset = panel_y + 60
+        label = self.font_bold.render("Fullscreen:", True, (255, 255, 255))
+        surface.blit(label, (panel_x + 50, y_offset))
+        
+        # Toggle button
+        toggle_x = panel_x + panel_w - 150
+        toggle_w = 80
+        toggle_h = 35
+        toggle_rect = pygame.Rect(toggle_x, y_offset - 5, toggle_w, toggle_h)
+        
+        is_on = game.temp_settings['fullscreen']
+        toggle_color = (50, 200, 50) if is_on else (200, 50, 50)
+        hover_toggle = toggle_rect.collidepoint(mx, my)
+        if hover_toggle:
+            toggle_color = tuple(min(255, c + 30) for c in toggle_color)
+        
+        pygame.draw.rect(surface, toggle_color, toggle_rect, border_radius=17)
+        toggle_text = self.font_bold.render("ON" if is_on else "OFF", True, (255, 255, 255))
+        surface.blit(toggle_text, toggle_text.get_rect(center=toggle_rect.center))
+        
+        # Store for event handling
+        if not hasattr(self, 'settings_buttons'):
+            self.settings_buttons = {}
+        self.settings_buttons['fullscreen'] = toggle_rect
+        
+        # --- VOLUME SLIDER ---
+        y_offset += 80
+        label = self.font_bold.render("Master Volume:", True, (255, 255, 255))
+        surface.blit(label, (panel_x + 50, y_offset))
+        
+        # Slider
+        slider_x = panel_x + 50
+        slider_y = y_offset + 35
+        slider_w = panel_w - 100
+        slider_h = 10
+        
+        # Background track
+        track_rect = pygame.Rect(slider_x, slider_y, slider_w, slider_h)
+        pygame.draw.rect(surface, (50, 50, 50), track_rect, border_radius=5)
+        
+        # Filled portion
+        volume = game.temp_settings['volume']
+        fill_w = int(slider_w * volume)
+        fill_rect = pygame.Rect(slider_x, slider_y, fill_w, slider_h)
+        pygame.draw.rect(surface, ACCENT_COLOR, fill_rect, border_radius=5)
+        
+        # Handle (circle)
+        handle_x = slider_x + fill_w
+        handle_y = slider_y + slider_h // 2
+        handle_radius = 12
+        handle_rect = pygame.Rect(handle_x - handle_radius, handle_y - handle_radius, 
+                                   handle_radius * 2, handle_radius * 2)
+        
+        hover_handle = handle_rect.collidepoint(mx, my) or track_rect.collidepoint(mx, my)
+        handle_color = (255, 255, 255) if hover_handle else (200, 200, 200)
+        pygame.draw.circle(surface, handle_color, (handle_x, handle_y), handle_radius)
+        pygame.draw.circle(surface, ACCENT_COLOR, (handle_x, handle_y), handle_radius - 2)
+        
+        # Volume percentage
+        vol_text = self.font_bold.render(f"{int(volume * 100)}%", True, (255, 255, 255))
+        surface.blit(vol_text, (panel_x + panel_w - 80, y_offset))
+        
+        # Store slider info for dragging
+        self.settings_buttons['volume_slider'] = track_rect
+        self.settings_buttons['volume_handle'] = handle_rect
+        
+        # --- RESOLUTION SELECTOR ---
+        y_offset += 80
+        label = self.font_bold.render("Resolution:", True, (255, 255, 255))
+        surface.blit(label, (panel_x + 50, y_offset))
+        
+        # Current resolution
+        res_index = game.temp_settings['resolution_index']
+        current_res = RESOLUTIONS[res_index]
+        res_text = f"{current_res[0]} x {current_res[1]}"
+        
+        # Left arrow
+        left_arrow_x = panel_x + panel_w - 250
+        arrow_w = 40
+        arrow_h = 35
+        left_rect = pygame.Rect(left_arrow_x, y_offset - 5, arrow_w, arrow_h)
+        
+        hover_left = left_rect.collidepoint(mx, my)
+        arrow_color = ACCENT_COLOR if hover_left else (100, 100, 100)
+        pygame.draw.rect(surface, arrow_color, left_rect, border_radius=5)
+        left_text = self.font_bold.render("<", True, (255, 255, 255))
+        surface.blit(left_text, left_text.get_rect(center=left_rect.center))
+        
+        # Resolution text
+        res_display = self.font_bold.render(res_text, True, (255, 255, 255))
+        surface.blit(res_display, res_display.get_rect(center=(left_arrow_x + arrow_w + 70, y_offset + 15)))
+        
+        # Right arrow
+        right_arrow_x = left_arrow_x + arrow_w + 140 + 20
+        right_rect = pygame.Rect(right_arrow_x, y_offset - 5, arrow_w, arrow_h)
+        
+        hover_right = right_rect.collidepoint(mx, my)
+        arrow_color = ACCENT_COLOR if hover_right else (100, 100, 100)
+        pygame.draw.rect(surface, arrow_color, right_rect, border_radius=5)
+        right_text = self.font_bold.render(">", True, (255, 255, 255))
+        surface.blit(right_text, right_text.get_rect(center=right_rect.center))
+        
+        self.settings_buttons['res_left'] = left_rect
+        self.settings_buttons['res_right'] = right_rect
+        
+        # --- SAVE & BACK BUTTON ---
+        btn_w = 180
+        btn_h = 50
+        btn_x = cx - btn_w // 2
+        btn_y = panel_y + panel_h - 70
+        
+        save_btn = pygame.Rect(btn_x, btn_y, btn_w, btn_h)
+        self.settings_buttons['save'] = save_btn
+        
+        hover_save = save_btn.collidepoint(mx, my)
+        btn_color = (80, 60, 100) if hover_save else (50, 40, 70)
+        border_color = ACCENT_COLOR if hover_save else (100, 100, 100)
+        
+        pygame.draw.rect(surface, btn_color, save_btn, border_radius=8)
+        pygame.draw.rect(surface, border_color, save_btn, 2, border_radius=8)
+        
+        save_text = self.font_bold.render("SAVE & BACK", True, (255, 255, 255))
+        surface.blit(save_text, save_text.get_rect(center=save_btn.center))
+        
+        # Back button (no save)
+        back_btn_w = 120
+        back_btn_h = 50
+        back_btn_x = 30
+        back_btn_y = VIRTUAL_H - back_btn_h - 30
+        
+        back_btn = pygame.Rect(back_btn_x, back_btn_y, back_btn_w, back_btn_h)
+        self.settings_buttons['back'] = back_btn
+        
+        hover_back = back_btn.collidepoint(mx, my)
+        btn_color = (60, 40, 40) if hover_back else (40, 30, 30)
+        border_color = (200, 100, 100) if hover_back else (100, 100, 100)
+        
+        pygame.draw.rect(surface, btn_color, back_btn, border_radius=8)
+        pygame.draw.rect(surface, border_color, back_btn, 2, border_radius=8)
+        
+        back_text = self.font_bold.render("CANCEL", True, (255, 255, 255))
+        surface.blit(back_text, back_text.get_rect(center=back_btn.center))
+    
+    def _get_resolution_index(self, game):
+        """Get current resolution index from actual screen size"""
+        from settings import RESOLUTIONS
+        screen_size = (game.screen.get_width(), game.screen.get_height())
+        
+        # Try to match current screen size to resolutions list
+        for i, res in enumerate(RESOLUTIONS):
+            if res == screen_size:
+                return i
+        
+        # Default to first resolution if no match
+        return 0
 
     def check_rune_hover(self, game):
         """Oyun sırasında rünler üzerine hover kontrolü - tooltip verisi döndürür"""
