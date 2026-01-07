@@ -23,8 +23,8 @@ class Block:
         else:
             self.color = self.base_color
         
-        # YENİ: RÜN SİSTEMİ
-        self.rune = None  # Bloğa takılı olan Rün objesi
+        # YENİ: RÜN SİSTEMİ (Hücre Bazlı - Çoklu Rün Desteği)
+        self.runes = {}  # {(row, col): RuneObj} formatında - Her hücreye ayrı rün
         
         # GOLD bloklarda pulse efekti için
         self.glow_pulse = 0.0
@@ -66,10 +66,22 @@ class Block:
         self.height = self.rows * TILE_SIZE
 
     def rotate(self):
+        old_rows = self.rows
+        old_cols = self.cols
         self.matrix = [list(row) for row in zip(*self.matrix[::-1])]
         self.update_dimensions()
         self.rect.width = self.width
         self.rect.height = self.height
+        
+        # Tüm rün hücrelerini güncelle (90 derece saat yönünde döndür)
+        if self.runes:
+            new_runes = {}
+            for (old_r, old_c), rune_obj in self.runes.items():
+                # Saat yönünde 90 derece: (r, c) -> (c, old_rows - 1 - r)
+                new_r = old_c
+                new_c = old_rows - 1 - old_r
+                new_runes[(new_r, new_c)] = rune_obj
+            self.runes = new_runes
         
         # Pop efekti
         self.target_scale = 1.2
@@ -80,6 +92,16 @@ class Block:
         self.update_dimensions()
         self.rect.width = self.width
         self.rect.height = self.height
+        
+        # Tüm rün hücrelerini güncelle (yatay flip)
+        if self.runes:
+            new_runes = {}
+            for (old_r, old_c), rune_obj in self.runes.items():
+                # Yatay flip: (r, c) -> (r, cols - 1 - c)
+                new_c = self.cols - 1 - old_c
+                new_runes[(old_r, new_c)] = rune_obj
+            self.runes = new_runes
+        
         self.target_scale = 1.2 
 
     def update(self):
@@ -106,10 +128,10 @@ class Block:
             self.target_scale = 1.0
             self.target_angle = 0
             
-            # Idle Float (Nefes Alma)
-            time = pygame.time.get_ticks() / 500
-            float_y = math.sin(time + self.idle_offset) * 3
-            target_y += float_y
+            # Idle Float (Nefes Alma) - DEVRE DIŞI: Sabit duruş
+            # time = pygame.time.get_ticks() / 500
+            # float_y = math.sin(time + self.idle_offset) * 3
+            # target_y += float_y
 
         # 2. FİZİK (LERP)
         self.visual_x = lerp(self.visual_x, target_x, 0.25)
@@ -137,11 +159,8 @@ class Block:
         gap = int(final_tile_size * 0.1)
         block_size = final_tile_size - gap
         
-        # GOLD bloklarda pulsating glow efekti
-        glow_intensity = 0
-        if self.tag == 'GOLD' and not is_ghost:
-            self.glow_pulse += 0.1
-            glow_intensity = int(20 + 15 * math.sin(self.glow_pulse))
+        # GOLD bloklarda SABİT çerçeve (pulsating glow KALDIRILDI)
+        is_gold_block = (self.tag == 'GOLD' and not is_ghost)
 
         # Yüzey Oluştur
         surf_w = int(self.width * current_scale * 1.5) + 50
@@ -161,11 +180,10 @@ class Block:
                     by = start_draw_y + (r_idx * final_tile_size) + (gap // 2)
                     rect = pygame.Rect(bx, by, block_size, block_size)
                     
-                    # GOLD blok için dış glow çiz
-                    if self.tag == 'GOLD' and glow_intensity > 0 and not is_ghost:
-                        glow_rect = rect.inflate(glow_intensity, glow_intensity)
-                        glow_color = (255, 215, 0, 50)  # Yarı saydam altın
-                        pygame.draw.rect(temp_surface, glow_color, glow_rect, border_radius=10)
+                    # GOLD blok için SABİT altın çerçeve
+                    if is_gold_block:
+                        gold_border_rect = rect.inflate(4, 4)
+                        pygame.draw.rect(temp_surface, (255, 215, 0), gold_border_rect, 3, border_radius=8)
 
                     if theme_type == 'glass':
                         c = self.color
@@ -183,19 +201,22 @@ class Block:
                          pygame.draw.rect(temp_surface, c, rect)
                          pygame.draw.rect(temp_surface, (0,0,0, alpha) if alpha < 255 else (0,0,0), rect, 2)
                          
-        # --- RÜN ÇİZİMİ (Bloğun merkezine) ---
-        if self.rune and not is_ghost:
-            cx = center_x
-            cy = center_y
-            rune_radius = int(14 * current_scale)
-            # Rün arka planı
-            pygame.draw.circle(temp_surface, (20, 20, 30), (cx, cy), rune_radius)
-            pygame.draw.circle(temp_surface, self.rune.color, (cx, cy), rune_radius, 2)
-            # Rün harfi
-            font = pygame.font.SysFont("Arial", int(18 * current_scale), bold=True)
-            txt = font.render(self.rune.icon, True, self.rune.color)
-            txt_rect = txt.get_rect(center=(cx, cy))
-            temp_surface.blit(txt, txt_rect)
+        # --- RÜN ÇİZİMİ (Çoklu Rün - Her Hücre İçin) ---
+        if self.runes and not is_ghost:
+            for (rune_r, rune_c), rune_obj in self.runes.items():
+                # Hücre koordinatını piksel koordinatına çevir
+                rune_cx = start_draw_x + (rune_c * final_tile_size) + (final_tile_size // 2)
+                rune_cy = start_draw_y + (rune_r * final_tile_size) + (final_tile_size // 2)
+                
+                rune_radius = int(12 * current_scale)
+                # Rün arka planı
+                pygame.draw.circle(temp_surface, (20, 20, 30), (rune_cx, rune_cy), rune_radius)
+                pygame.draw.circle(temp_surface, rune_obj.color, (rune_cx, rune_cy), rune_radius, 2)
+                # Rün harfi
+                font = pygame.font.SysFont("Arial", int(14 * current_scale), bold=True)
+                txt = font.render(rune_obj.icon, True, rune_obj.color)
+                txt_rect = txt.get_rect(center=(rune_cx, rune_cy))
+                temp_surface.blit(txt, txt_rect)
 
         # Döndür ve Çiz
         if current_angle != 0:

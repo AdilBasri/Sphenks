@@ -4,6 +4,7 @@ import os
 import random
 import math
 from settings import *
+from settings import STATE_PLAYING  # Tooltip kontrolü için
 
 # --- MENÜ İÇİN UÇUŞAN DEKORATİF BLOK ---
 class MenuBlock:
@@ -202,6 +203,10 @@ class UIManager:
         self.totem_images = {}
         self.title_letters = [] 
         
+        # YENİ: Tooltip sistemi için
+        self.pending_tooltip = None
+        self.shop_tooltip = None
+        
         self.load_bg_assets()
         self.load_totem_assets()
         
@@ -267,6 +272,7 @@ class UIManager:
                 path = os.path.join(base_path, "assets", filename)
                 if os.path.exists(path):
                     img = pygame.image.load(path).convert_alpha()
+                    # smoothscale yerine scale kullan - piksel netliği için
                     img = pygame.transform.scale(img, (TOTEM_ICON_SIZE, TOTEM_ICON_SIZE))
                     self.totem_images[key] = img
             except Exception as e:
@@ -481,7 +487,88 @@ class UIManager:
             surface.blit(txt_surf, (x, y + i * line_spacing))
         return len(lines) * line_spacing
 
+    def calculate_wrapped_text_height(self, text, font, max_width, line_spacing=15):
+        """Metin kaydırılınca ne kadar yükseklik kaplayacağını hesapla (Dinamik tooltip boyutu için)"""
+        words = text.split(' ')
+        lines = []
+        current_line = []
+        for word in words:
+            current_line.append(word)
+            fw, fh = font.size(' '.join(current_line))
+            if fw > max_width:
+                current_line.pop()
+                if current_line:
+                    lines.append(' '.join(current_line))
+                current_line = [word]
+        if current_line:
+            lines.append(' '.join(current_line))
+        return max(len(lines), 1) * line_spacing
+
+    def draw_dynamic_tooltip(self, surface, title, desc, mx, my, title_color=None, has_image=False, image=None, extra_line=None, extra_color=None):
+        """Dinamik boyutlu tooltip çizer - İçeriğe göre yükseklik ayarlar"""
+        if title_color is None:
+            title_color = TOTAL_COLOR
+        
+        padding = 10
+        tooltip_w = 160
+        desc_font = pygame.font.SysFont(FONT_NAME, 11)
+        
+        # Yükseklik hesapla
+        title_h = 18
+        desc_h = self.calculate_wrapped_text_height(desc, desc_font, tooltip_w - (padding * 2), line_spacing=13)
+        image_h = 48 if has_image else 0
+        extra_h = 16 if extra_line else 0
+        
+        tooltip_h = padding + title_h + 4 + desc_h + extra_h + padding
+        if has_image:
+            tooltip_h += image_h + 4
+        
+        # Konum hesapla (ekran sınırları içinde kal)
+        tt_x = mx + 15
+        tt_y = my + 10
+        if tt_x + tooltip_w > VIRTUAL_W:
+            tt_x = mx - tooltip_w - 10
+        if tt_y + tooltip_h > VIRTUAL_H:
+            tt_y = my - tooltip_h - 10
+        if tt_x < SIDEBAR_WIDTH:
+            tt_x = SIDEBAR_WIDTH + 5
+        if tt_y < 5:
+            tt_y = 5
+            
+        tt_rect = pygame.Rect(tt_x, tt_y, tooltip_w, tooltip_h)
+        
+        # Arka plan çiz
+        pygame.draw.rect(surface, (15, 15, 20), tt_rect, border_radius=6)
+        pygame.draw.rect(surface, (100, 100, 120), tt_rect, 2, border_radius=6)
+        
+        y_cursor = tt_rect.y + padding
+        
+        # Resim varsa çiz
+        if has_image and image:
+            img_rect = image.get_rect(centerx=tt_rect.centerx, top=y_cursor)
+            surface.blit(image, img_rect)
+            y_cursor += image_h + 4
+        
+        # Başlık
+        name_txt = self.font_bold.render(title, True, title_color)
+        surface.blit(name_txt, (tt_rect.x + padding, y_cursor))
+        y_cursor += title_h + 4
+        
+        # Açıklama
+        self.render_wrapped_text(surface, desc, desc_font, (200, 200, 200), tt_rect.x + padding, y_cursor, tooltip_w - (padding * 2), line_spacing=13)
+        y_cursor += desc_h
+        
+        # Ekstra satır (fiyat vs.)
+        if extra_line:
+            extra_txt = self.font_bold.render(extra_line, True, extra_color if extra_color else (100, 255, 100))
+            surface.blit(extra_txt, (tt_rect.x + padding, y_cursor))
+        
+        return tt_rect
+
     def draw_top_bar(self, surface, game):
+        """Totemler için üst bar - Tooltip verisi ayrı saklanır, draw sonunda çizilir"""
+        self.pending_tooltip = None  # Tooltip bilgisi - draw döngüsünün sonunda çizilecek
+        
         if not game.totems: return
         count = len(game.totems)
         total_w = count * TOTEM_ICON_SIZE + (count - 1) * 10 
@@ -498,17 +585,18 @@ class UIManager:
                 letter = self.font_bold.render(t.name[0], True, (255,255,255))
                 surface.blit(letter, letter.get_rect(center=rect.center))
             pygame.draw.rect(surface, ACCENT_COLOR, rect, 2, border_radius=5)
+            
+            # Tooltip verisini sakla - çizim döngüsünün sonunda render edilecek
             if rect.collidepoint(mx, my):
-                tooltip_w = 140; tooltip_h = 80
-                tt_x = rect.centerx - tooltip_w // 2; tt_y = rect.bottom + 5
-                if tt_x < SIDEBAR_WIDTH: tt_x = SIDEBAR_WIDTH + 5
-                tt_rect = pygame.Rect(tt_x, tt_y, tooltip_w, tooltip_h)
-                pygame.draw.rect(surface, (20, 20, 25), tt_rect, border_radius=5)
-                pygame.draw.rect(surface, (100, 100, 100), tt_rect, 1, border_radius=5)
-                name_txt = self.font_bold.render(t.name, True, TOTAL_COLOR)
-                surface.blit(name_txt, (tt_rect.x + 5, tt_rect.y + 5))
-                desc_font = pygame.font.SysFont(FONT_NAME, 12)
-                self.render_wrapped_text(surface, t.desc, desc_font, (200, 200, 200), tt_rect.x + 5, tt_rect.y + 25, tooltip_w - 10)
+                img = self.totem_images.get(t.key, None)
+                self.pending_tooltip = {
+                    'type': 'totem',
+                    'title': t.name,
+                    'desc': t.desc,
+                    'mx': mx,
+                    'my': my,
+                    'image': img
+                }
 
     def draw_menu(self, surface, high_score):
         # Arkaplan zaten draw_bg ile çizildi (ra.png ve gözler)
@@ -639,46 +727,197 @@ class UIManager:
         self.pause_buttons = {'YES': yes_btn, 'NO': no_btn}
 
     def draw_shop(self, surface, game):
+        """Market ekranı - Balatro tarzı kart görünümü"""
         overlay = pygame.Surface((VIRTUAL_W, VIRTUAL_H), pygame.SRCALPHA)
         overlay.fill(SHOP_BG_COLOR)
         surface.blit(overlay, (0,0))
+        
         lbl = self.font_big.render("BAZAAR", True, ACCENT_COLOR)
         surface.blit(lbl, lbl.get_rect(center=(VIRTUAL_W//2, 30)))
+        
+        # Kredi Göstergesi
         credits_bg = pygame.Rect(VIRTUAL_W - 100, 10, 90, 35)
         pygame.draw.rect(surface, (20, 40, 20), credits_bg, border_radius=15)
         pygame.draw.rect(surface, (50, 200, 50), credits_bg, 2, border_radius=15)
         credits_txt = self.font_bold.render(f"${game.credits}", True, (100, 255, 100))
         surface.blit(credits_txt, credits_txt.get_rect(center=credits_bg.center))
-        start_x = (VIRTUAL_W - (3*90)) // 2
+        
         mx, my = pygame.mouse.get_pos()
-        hovered_totem = None
+        self.shop_tooltip = None  # Shop tooltip verisi
+        
+        # --- TOTEMLER: BALATRO TARZI KART GÖRÜNÜMÜ ---
+        card_w = 100
+        card_h = 150
+        card_gap = 15
+        totem_count = len(game.shop_totems)
+        total_cards_w = totem_count * card_w + (totem_count - 1) * card_gap
+        start_x = (VIRTUAL_W - total_cards_w) // 2
+        card_y = 60
+        
+        # Totem Başlığı
+        totem_header = self.font_bold.render("TOTEMS", True, (200, 200, 200))
+        surface.blit(totem_header, (start_x, card_y - 20))
+        
         for i, totem in enumerate(game.shop_totems):
-            rect = pygame.Rect(start_x + (i*90), 80, 70, 100)
-            col = (50, 40, 60)
-            is_hovered = rect.collidepoint(mx, my)
-            if is_hovered: col = (70, 60, 80); hovered_totem = totem
-            pygame.draw.rect(surface, col, rect, border_radius=4)
-            pygame.draw.rect(surface, ACCENT_COLOR, rect, 1, border_radius=4)
-            n = self.font_small.render(totem.name[:8], True, (255,255,255))
-            p = self.font_bold.render(f"${totem.price}", True, (100, 255, 100))
-            surface.blit(n, (rect.x + 2, rect.y + 5))
-            surface.blit(p, (rect.x + 2, rect.bottom - 20))
-            totem.rect = rect
-        if hovered_totem:
-            tooltip_w = 180; tooltip_h = 70
-            tt_x = mx + 15; tt_y = my + 10
-            if tt_x + tooltip_w > VIRTUAL_W: tt_x = mx - tooltip_w - 10
-            if tt_y + tooltip_h > VIRTUAL_H: tt_y = my - tooltip_h - 10
-            tt_rect = pygame.Rect(tt_x, tt_y, tooltip_w, tooltip_h)
-            pygame.draw.rect(surface, (15, 15, 20), tt_rect, border_radius=6)
-            pygame.draw.rect(surface, (100, 100, 120), tt_rect, 2, border_radius=6)
-            name_txt = self.font_bold.render(hovered_totem.name, True, TOTAL_COLOR)
-            surface.blit(name_txt, (tt_rect.x + 8, tt_rect.y + 8))
-            desc_font = pygame.font.SysFont(FONT_NAME, 11)
-            self.render_wrapped_text(surface, hovered_totem.desc, desc_font, (200, 200, 200), tt_rect.x + 8, tt_rect.y + 28, tooltip_w - 16, line_spacing=13)
+            card_x = start_x + i * (card_w + card_gap)
+            card_rect = pygame.Rect(card_x, card_y, card_w, card_h)
+            
+            # Hover kontrolü
+            is_hovered = card_rect.collidepoint(mx, my)
+            
+            # Kart arka planı
+            bg_col = (50, 45, 60) if not is_hovered else (70, 65, 85)
+            pygame.draw.rect(surface, bg_col, card_rect, border_radius=8)
+            
+            # Kart çerçevesi - alınabilirlik durumuna göre renk
+            border_col = ACCENT_COLOR if game.credits >= totem.price else (100, 60, 60)
+            pygame.draw.rect(surface, border_col, card_rect, 2, border_radius=8)
+            
+            # --- KART İÇERİĞİ ---
+            content_y = card_rect.y + 8
+            
+            # 1. Görsel (varsa)
+            if totem.key in self.totem_images:
+                img = self.totem_images[totem.key]
+                # Kartın merkezine büyük ikon
+                img_scaled = pygame.transform.scale(img, (48, 48))
+                img_rect = img_scaled.get_rect(centerx=card_rect.centerx, top=content_y)
+                surface.blit(img_scaled, img_rect)
+                content_y += 52
+            else:
+                # Görsel yoksa placeholder
+                placeholder_rect = pygame.Rect(card_rect.centerx - 24, content_y, 48, 48)
+                pygame.draw.rect(surface, (40, 35, 50), placeholder_rect, border_radius=6)
+                letter = self.font_big.render(totem.name[0], True, (150, 150, 150))
+                surface.blit(letter, letter.get_rect(center=placeholder_rect.center))
+                content_y += 52
+            
+            # 2. İsim (kart genişliğine göre kısaltılmış)
+            max_name_width = card_w - 10  # Kartın kenar boşlukları
+            name_display = totem.name
+            name_txt = self.font_bold.render(name_display, True, TOTAL_COLOR)
+            
+            # Metin genişliği kartı aşıyorsa kısalt
+            while name_txt.get_width() > max_name_width and len(name_display) > 4:
+                name_display = name_display[:-1]
+                name_txt = self.font_bold.render(name_display + "..", True, TOTAL_COLOR)
+            
+            if name_display != totem.name:
+                name_txt = self.font_bold.render(name_display + "..", True, TOTAL_COLOR)
+            
+            name_rect = name_txt.get_rect(centerx=card_rect.centerx, top=content_y)
+            surface.blit(name_txt, name_rect)
+            content_y += 18
+            
+            # 3. Kısa Açıklama (1-2 satır)
+            desc_font = pygame.font.SysFont(FONT_NAME, 10)
+            desc_short = totem.desc[:20] + ".." if len(totem.desc) > 22 else totem.desc
+            desc_txt = desc_font.render(desc_short, True, (180, 180, 180))
+            desc_rect = desc_txt.get_rect(centerx=card_rect.centerx, top=content_y)
+            surface.blit(desc_txt, desc_rect)
+            
+            # 4. Fiyat (En altta)
+            price_y = card_rect.bottom - 25
+            price_bg = pygame.Rect(card_rect.x + 10, price_y, card_w - 20, 20)
+            price_col = (30, 60, 30) if game.credits >= totem.price else (60, 30, 30)
+            pygame.draw.rect(surface, price_col, price_bg, border_radius=4)
+            price_txt = self.font_bold.render(f"${totem.price}", True, (100, 255, 100) if game.credits >= totem.price else (255, 100, 100))
+            surface.blit(price_txt, price_txt.get_rect(center=price_bg.center))
+            
+            totem.rect = card_rect
+            
+            # Hover durumunda tooltip verisi sakla
+            if is_hovered:
+                img = self.totem_images.get(totem.key, None)
+                self.shop_tooltip = {
+                    'type': 'totem',
+                    'title': totem.name,
+                    'desc': totem.desc,
+                    'mx': mx,
+                    'my': my,
+                    'image': img
+                }
+        
+        # --- RÜNLER: KART GÖRÜNÜMÜ ---
+        rune_card_w = 80
+        rune_card_h = 120
+        rune_count = len(game.shop_runes)
+        if rune_count > 0:
+            rune_header = self.font_bold.render("RUNES", True, (200, 200, 200))
+            rune_header_y = card_y + card_h + 30
+            surface.blit(rune_header, (start_x, rune_header_y - 20))
+            
+            total_runes_w = rune_count * rune_card_w + (rune_count - 1) * card_gap
+            rune_start_x = (VIRTUAL_W - total_runes_w) // 2
+            rune_y = rune_header_y
+            
+            for i, rune in enumerate(game.shop_runes):
+                rx = rune_start_x + i * (rune_card_w + card_gap)
+                rune_rect = pygame.Rect(rx, rune_y, rune_card_w, rune_card_h)
+                
+                is_hovered = rune_rect.collidepoint(mx, my)
+                
+                # Kart arka planı
+                bg_col = (40, 35, 50) if not is_hovered else (60, 55, 75)
+                pygame.draw.rect(surface, bg_col, rune_rect, border_radius=8)
+                
+                # Çerçeve rengi
+                border_col = rune.color if game.credits >= rune.price else (100, 60, 60)
+                pygame.draw.rect(surface, border_col, rune_rect, 2, border_radius=8)
+                
+                # Rün Simgesi (Büyük daire)
+                circle_y = rune_rect.y + 35
+                pygame.draw.circle(surface, (20, 20, 30), (rune_rect.centerx, circle_y), 25)
+                pygame.draw.circle(surface, rune.color, (rune_rect.centerx, circle_y), 23, 3)
+                
+                icon_font = pygame.font.SysFont("Arial", 24, bold=True)
+                icon_txt = icon_font.render(rune.icon, True, rune.color)
+                surface.blit(icon_txt, icon_txt.get_rect(center=(rune_rect.centerx, circle_y)))
+                
+                # Rün ismi
+                name_txt = self.font_small.render(rune.name[:10], True, (255, 255, 255))
+                surface.blit(name_txt, name_txt.get_rect(centerx=rune_rect.centerx, top=rune_rect.y + 65))
+                
+                # Fiyat
+                price_y = rune_rect.bottom - 25
+                price_bg = pygame.Rect(rune_rect.x + 8, price_y, rune_card_w - 16, 18)
+                price_col = (30, 60, 30) if game.credits >= rune.price else (60, 30, 30)
+                pygame.draw.rect(surface, price_col, price_bg, border_radius=4)
+                price_txt = self.font_bold.render(f"${rune.price}", True, (100, 255, 100) if game.credits >= rune.price else (255, 100, 100))
+                surface.blit(price_txt, price_txt.get_rect(center=price_bg.center))
+                
+                rune.rect = rune_rect
+                
+                # Hover durumunda tooltip verisi sakla
+                if is_hovered:
+                    self.shop_tooltip = {
+                        'type': 'rune',
+                        'title': rune.name,
+                        'desc': rune.desc,
+                        'mx': mx,
+                        'my': my,
+                        'color': rune.color,
+                        'price': rune.price
+                    }
+        
+        # --- TOOLTIP ÇİZİMİ (En son, her şeyin üstünde) ---
+        if self.shop_tooltip:
+            tt = self.shop_tooltip
+            if tt['type'] == 'totem':
+                self.draw_dynamic_tooltip(surface, tt['title'], tt['desc'], tt['mx'], tt['my'], 
+                                         title_color=TOTAL_COLOR, has_image=bool(tt.get('image')), image=tt.get('image'))
+            elif tt['type'] == 'rune':
+                self.draw_dynamic_tooltip(surface, tt['title'], tt['desc'], tt['mx'], tt['my'],
+                                         title_color=tt.get('color', ACCENT_COLOR))
+        
+        # Next Round butonu
+        nxt_rect = pygame.Rect(VIRTUAL_W - 160, VIRTUAL_H - 50, 140, 35)
+        nxt_hovered = nxt_rect.collidepoint(mx, my)
+        nxt_col = (60, 80, 60) if nxt_hovered else (40, 60, 40)
+        pygame.draw.rect(surface, nxt_col, nxt_rect, border_radius=8)
+        pygame.draw.rect(surface, (100, 200, 100), nxt_rect, 2, border_radius=8)
         nxt = self.font_bold.render("NEXT ROUND >", True, (255,255,255))
-        nxt_rect = nxt.get_rect(bottomright=(VIRTUAL_W - 30, VIRTUAL_H - 30))
-        surface.blit(nxt, nxt_rect)
+        surface.blit(nxt, nxt.get_rect(center=nxt_rect.center))
 
     def draw_game_over(self, surface, score):
         o = pygame.Surface((VIRTUAL_W, VIRTUAL_H), pygame.SRCALPHA)
@@ -691,3 +930,36 @@ class UIManager:
         surface.blit(t, t.get_rect(center=(cx, cy - 50)))
         surface.blit(s, s.get_rect(center=(cx, cy + 10)))
         surface.blit(r, r.get_rect(center=(cx, cy + 60)))
+
+    def check_rune_hover(self, game):
+        """Oyun sırasında rünler üzerine hover kontrolü - tooltip verisi döndürür"""
+        mx, my = pygame.mouse.get_pos()
+        for r in game.consumables:
+            if r.rect and r.rect.collidepoint(mx, my) and not r.dragging:
+                return {
+                    'type': 'rune',
+                    'title': r.name,
+                    'desc': r.desc,
+                    'mx': mx,
+                    'my': my,
+                    'color': r.color
+                }
+        return None
+
+    def draw_final_tooltip_layer(self, surface, game):
+        """Tüm çizimlerden sonra çağrılır - Tooltip'ler her şeyin üstünde görünür"""
+        # Önce totem tooltip'lerini kontrol et (draw_top_bar'dan)
+        if hasattr(self, 'pending_tooltip') and self.pending_tooltip:
+            tt = self.pending_tooltip
+            img = tt.get('image', None)
+            self.draw_dynamic_tooltip(surface, tt['title'], tt['desc'], tt['mx'], tt['my'], 
+                                     title_color=TOTAL_COLOR, has_image=bool(img), image=img)
+            return  # Bir tooltip çizildiyse diğerlerini kontrol etme
+        
+        # Oyun durumunda rün tooltip'lerini kontrol et
+        if game.state == STATE_PLAYING:
+            rune_tt = self.check_rune_hover(game)
+            if rune_tt:
+                self.draw_dynamic_tooltip(surface, rune_tt['title'], rune_tt['desc'], 
+                                         rune_tt['mx'], rune_tt['my'], 
+                                         title_color=rune_tt.get('color', ACCENT_COLOR))

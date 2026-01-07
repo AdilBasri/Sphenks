@@ -73,8 +73,9 @@ class Grid:
                     # Tag
                     tag = getattr(block, 'tag', 'NONE')
                     self.grid_tags[grid_row + r][grid_col + c] = tag
-                    # Rune (YENİ)
-                    self.grid_runes[grid_row + r][grid_col + c] = block.rune
+                    # Rune (Çoklu Rün Sistemi - Hücre Bazlı)
+                    rune_at_cell = block.runes.get((r, c), None)
+                    self.grid_runes[grid_row + r][grid_col + c] = rune_at_cell
 
     def check_clears(self):
         """

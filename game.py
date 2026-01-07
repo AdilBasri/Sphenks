@@ -346,16 +346,27 @@ class Game:
                     elif event.button == 2 and self.held_block: self.held_block.flip()
 
                 elif event.type == pygame.MOUSEBUTTONUP:
-                    # --- Rün Bırakma Mantığı ---
+                    # --- Rün Bırakma Mantığı (Çoklu Rün Sistemi) ---
                     if self.held_rune:
                         dropped_on_block = False
                         for b in self.blocks:
                             if b.rect.collidepoint(mx, my):
-                                b.rune = self.held_rune
-                                self.consumables.remove(self.held_rune)
-                                self.particle_system.create_text(mx, my, "RUNE APPLIED!", self.held_rune.color)
-                                self.audio.play('select')
-                                dropped_on_block = True
+                                # Hangi hücreye bırakıldığını hesapla
+                                rel_x = mx - b.visual_x
+                                rel_y = my - b.visual_y
+                                cell_col = int(rel_x // TILE_SIZE)
+                                cell_row = int(rel_y // TILE_SIZE)
+                                
+                                # Hücrenin geçerli olup olmadığını kontrol et (matris sınırları içinde ve dolu mu)
+                                if 0 <= cell_row < b.rows and 0 <= cell_col < b.cols:
+                                    if b.matrix[cell_row][cell_col] == 1:
+                                        # Rünü hücreye ata (aynı hücrede varsa üzerine yazar)
+                                        b.runes[(cell_row, cell_col)] = self.held_rune
+                                        self.consumables.remove(self.held_rune)
+                                        self.particle_system.create_text(mx, my, "RUNE APPLIED!", self.held_rune.color)
+                                        self.audio.play('select')
+                                        dropped_on_block = True
+                                
                                 break
                         self.held_rune.dragging = False
                         self.held_rune = None
@@ -570,7 +581,7 @@ class Game:
             self.ui.draw_hand_bg(self.screen)
             self.ui.draw_top_bar(self.screen, self)
             
-            # --- RÜNLERİ ÇİZ (Geçici UI) ---
+            # --- RÜNLERİ ÇİZ (Envanter - Sürüklenmeyen) ---
             if self.state == STATE_PLAYING:
                 start_x = SIDEBAR_WIDTH + 20
                 start_y = 60 # Totemlerin altı
@@ -578,17 +589,13 @@ class Game:
                     if not r.dragging:
                         r.x = start_x + i * 50
                         r.y = start_y
-                    r.rect = pygame.Rect(r.x, r.y, 40, 40)
-                    # Basit Rün Çizimi (Yuvarlak)
-                    pygame.draw.circle(self.screen, (20,20,30), (r.x+20, r.y+20), 20)
-                    pygame.draw.circle(self.screen, r.color, (r.x+20, r.y+20), 18)
-                    font = pygame.font.SysFont("Arial", 20, bold=True)
-                    txt = font.render(r.icon, True, (255,255,255))
-                    self.screen.blit(txt, txt.get_rect(center=(r.x+20, r.y+20)))
-                    
-                    if r.dragging:
-                        # Sürüklenirken biraz büyük çiz
-                        pass
+                        r.rect = pygame.Rect(r.x, r.y, 40, 40)
+                        # Basit Rün Çizimi (Yuvarlak)
+                        pygame.draw.circle(self.screen, (20,20,30), (r.x+20, r.y+20), 20)
+                        pygame.draw.circle(self.screen, r.color, (r.x+20, r.y+20), 18)
+                        font = pygame.font.SysFont("Arial", 20, bold=True)
+                        txt = font.render(r.icon, True, (255,255,255))
+                        self.screen.blit(txt, txt.get_rect(center=(r.x+20, r.y+20)))
 
             theme = self.get_current_theme()
             self.grid.draw(self.screen, total_shake_x, total_shake_y, theme)
@@ -612,6 +619,16 @@ class Game:
                 if b != self.held_block: b.draw(self.screen, 0, 0, 0.8, 255, theme['style'])
             if self.held_block: self.held_block.draw(self.screen, 0, 0, 1.0, 255, theme['style'])
             
+            # --- SÜRÜKLENEN RÜN ÇİZİMİ (Grid ve blokların ÜSTÜnde - Z-Index Fix) ---
+            if self.state == STATE_PLAYING and self.held_rune and self.held_rune.dragging:
+                rx, ry = self.held_rune.x, self.held_rune.y
+                # Biraz büyük çiz (sürüklenirken)
+                pygame.draw.circle(self.screen, (20, 20, 30), (rx, ry), 24)
+                pygame.draw.circle(self.screen, self.held_rune.color, (rx, ry), 22, 3)
+                font = pygame.font.SysFont("Arial", 22, bold=True)
+                txt = font.render(self.held_rune.icon, True, self.held_rune.color)
+                self.screen.blit(txt, txt.get_rect(center=(rx, ry)))
+            
             danger_level = 0.0
             if self.active_boss_effect: danger_level = 0.2 
             self.particle_system.atmosphere.draw_overlay(self.screen, danger_level)
@@ -621,24 +638,15 @@ class Game:
             
             if self.state == STATE_SHOP:
                 self.ui.draw_shop(self.screen, self)
-                # Dükkandaki Rünleri Çiz (Ekstra)
-                sx = (self.w - (2*50)) // 2
-                sy = 220
-                for i, r in enumerate(self.shop_runes):
-                    rx = sx + i*60
-                    ry = sy
-                    r.rect = pygame.Rect(rx, ry, 40, 40)
-                    pygame.draw.circle(self.screen, (20,20,30), (rx+20, ry+20), 20)
-                    pygame.draw.circle(self.screen, r.color, (rx+20, ry+20), 18, 2)
-                    font = pygame.font.SysFont("Arial", 16, bold=True)
-                    t = font.render(r.icon, True, r.color)
-                    self.screen.blit(t, t.get_rect(center=(rx+20, ry+20)))
-                    # Fiyat
-                    p = font.render(f"${r.price}", True, (100, 255, 100))
-                    self.screen.blit(p, (rx, ry+45))
+                # NOT: Rünler artık sadece ui.draw_shop içinde çiziliyor (çift çizim kaldırıldı)
 
             elif self.state == STATE_PAUSE: self.ui.draw_pause_overlay(self.screen)
             elif self.state == STATE_GAME_OVER: self.ui.draw_game_over(self.screen, self.score)
+            
+            # --- TOOLTIP KATMANI (En son çizilir - Z-Index düzeltmesi) ---
+            # Shop ekranı kendi tooltip'ini çiziyor, diğer durumlar için bu katmanı kullan
+            if self.state != STATE_SHOP:
+                self.ui.draw_final_tooltip_layer(self.screen, self)
         
         self.crt.draw(self.screen)
         pygame.display.flip()

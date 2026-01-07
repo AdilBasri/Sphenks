@@ -5,39 +5,39 @@ import pygame
 RUNE_DATA = {
     'rune_fire': {
         'name': 'Magma Rune',
-        'desc': '+30 Mult',
+        'desc': '+4 Mult',
         'color': (255, 80, 0), # Turuncu
         'icon': 'M',
         'price': 4,
         'effect': 'add_mult',
-        'value': 30
+        'value': 4
     },
     'rune_ice': {
         'name': 'Glacier Rune',
-        'desc': '+100 Chips',
+        'desc': '+20 Chips',
         'color': (100, 200, 255), # Buz Mavisi
         'icon': 'C',
         'price': 4,
         'effect': 'add_chips',
-        'value': 100
+        'value': 20
     },
     'rune_void': {
         'name': 'Void Rune',
-        'desc': 'x1.5 Mult',
+        'desc': 'x1.2 Mult',
         'color': (150, 50, 200), # Mor
         'icon': 'X',
         'price': 6,
         'effect': 'multiply_mult',
-        'value': 1.5
+        'value': 1.2
     },
     'rune_gold': {
         'name': 'Midas Rune',
-        'desc': '+$3 on clear',
+        'desc': '+$1 on clear',
         'color': (255, 215, 0), # Altın
         'icon': '$',
         'price': 5,
         'effect': 'add_money',
-        'value': 3
+        'value': 1
     }
 }
 
