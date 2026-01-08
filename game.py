@@ -5,8 +5,9 @@ import random
 import math
 import os
 from settings import *
-from settings import USE_FULLSCREEN, WINDOW_W, WINDOW_H, STATE_DEBT, PHARAOH_QUOTES, COLLECTIBLES, STATE_COLLECTION, STATE_SETTINGS, STATE_TRAINING, RESOLUTIONS
+from settings import USE_FULLSCREEN, WINDOW_W, WINDOW_H, STATE_DEBT, PHARAOH_QUOTES, COLLECTIBLES, STATE_COLLECTION, STATE_SETTINGS, STATE_TRAINING, RESOLUTIONS, STATE_INTRO
 from grid import Grid
+import intro
 from block import Block
 from effects import ParticleSystem, BossAtmosphere
 from totems import Totem, TotemLogic, TOTEM_DATA, OMEGA_KEYS
@@ -41,13 +42,13 @@ class Game:
         self.input_cooldown = 0
 
         # Core game state defaults
-        self.state = STATE_MENU
+        self.state = STATE_INTRO
         self.ante = 1
         self.round = 1
         self.force_omega_shop = False
         self.max_consumables = 5
         self.credits = 0
-        self.high_score = 0
+        self.high_score = self.save_manager.data.get('high_score', 0)
         self.screen_shake = 0
         self.scoring_data = {'base': 0, 'mult': 0, 'total': 0}
         self.fullscreen = False
@@ -65,6 +66,12 @@ class Game:
         self.audio = AudioManager()
         self.ui = UIManager()
         self.crt = CRTManager()
+        
+        # Initialize intro video manager (after screen creation)
+        self.intro_manager = intro.IntroManager(self.screen, "assets/sphenks_video.mp4")
+        # Play intro audio immediately
+        pygame.mixer.music.load("assets/intro_audio.mp3")
+        pygame.mixer.music.play()
         self.particle_system = ParticleSystem()
         
         # Grid and positioning
@@ -244,6 +251,16 @@ class Game:
             if self.score > self.high_score:
                 self.high_score = self.score
                 self.save_high_score()
+
+    def save_high_score(self):
+        """Persist the current high score to save data."""
+        try:
+            prev = self.save_manager.data.get('high_score', 0)
+            if self.high_score > prev:
+                self.save_manager.data['high_score'] = self.high_score
+                self.save_manager.save_data()
+        except Exception as e:
+            print(f"Warning: could not save high score: {e}")
 
     def next_level(self):
         # Calculate debt payment (based on round score)
@@ -512,10 +529,22 @@ class Game:
             
             if self.state == STATE_SCORING: return 
 
+            if self.state == STATE_INTRO:
+                # Allow skipping intro with any key press or mouse click
+                if event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
+                    self.input_cooldown = 20  # Prevent ghost clicks after skip
+                    pygame.mixer.music.stop()  # Stop intro audio
+                    self.intro_manager.active = False
+                    self.intro_manager.close()
+                    self.state = STATE_MENU
+                    # Start background music
+                    pygame.mixer.music.load("assets/music.mp3")
+                    pygame.mixer.music.play(-1)
+                    self.audio.play('select')
+
             if self.state == STATE_MENU:
-                # Handle menu button clicks - only on MOUSEBUTTONUP (not MOUSEBUTTONDOWN)
-                # This prevents double-click issues
-                if event.type == pygame.MOUSEBUTTONUP:
+                # Handle menu button clicks on mouse down for snappy response
+                if event.type == pygame.MOUSEBUTTONDOWN:
                     if hasattr(self.ui, 'menu_buttons'):
                         for rect, text in self.ui.menu_buttons:
                             if rect.collidepoint(mx, my):
@@ -944,7 +973,18 @@ class Game:
         
         TOTAL_TUTORIAL_STEPS = 6
 
-        if self.state == STATE_TRAINING:
+        if self.state == STATE_INTRO:
+            playing = self.intro_manager.update()
+
+            if not playing:
+                self.intro_manager.close()
+                self.state = STATE_MENU
+                pygame.mixer.music.load("assets/music.mp3")
+                pygame.mixer.music.play(-1)
+
+            return
+        
+        elif self.state == STATE_TRAINING:
             # Tutorial mode - update blocks and runes for animation
             for b in self.blocks: 
                 b.update()
@@ -1046,7 +1086,13 @@ class Game:
                 if self.score >= self.level_target and not self.blocks and self.void_count == 0: self.check_round_end()
 
     def draw(self):
-        # All rendering goes directly to screen
+        if self.state == STATE_INTRO:
+            if self.intro_manager:
+                self.intro_manager.draw()  # Draw the video frame on top
+            pygame.display.flip()  # Ensure intro frame is pushed to display
+            return  # Stop
+        
+        # All other states - normal rendering
         self.ui.draw_bg(self.screen)
         
         if self.state == STATE_MENU:
@@ -1119,6 +1165,9 @@ class Game:
                 self.screen.blit(txt, txt.get_rect(center=(rx, ry)))
         elif self.state == STATE_ROUND_SELECT:
             self.ui.draw_round_select(self.screen, self)
+        elif self.state == STATE_INTRO:
+            # Intro manager already blits frame in update/play
+            pass
         elif self.state == STATE_DEBT:
             self.ui.draw_debt_screen(self.screen, self)
         elif self.state == STATE_COLLECTION:

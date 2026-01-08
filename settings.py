@@ -104,6 +104,7 @@ SND_SELECT = 'sounds/select.wav'
 SND_HIT = 'sounds/hit.wav'
 
 # --- STATES ---
+STATE_INTRO = 'intro'
 STATE_MENU = 'menu'
 STATE_TRAINING = 'training'
 STATE_ROUND_SELECT = 'round_select'
