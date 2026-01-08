@@ -37,6 +37,8 @@ class Game:
         self.debt_quote_index = 0
         self.debt_quote_char_index = 0
         self.debt_quote_timer = 0
+        # Active quote text for debt typewriter effect (defaults safe)
+        self.current_quote_text = "..."
         self.newly_unlocked_items = []  # Items unlocked in this debt screen
         # Global input guard to prevent ghost clicks after state changes
         self.input_cooldown = 0
@@ -271,20 +273,27 @@ class Game:
     def next_level(self):
         # Calculate debt payment (based on round score)
         self.debt_payment_amount = self.score
-        
-        # Save old debt value for animation
-        save_data = self.save_manager.get_data()
-        self.debt_old_value = save_data['total_debt'] - save_data['debt_paid']
-        
-        # Pay the debt
-        result = self.save_manager.pay_debt(self.debt_payment_amount)
-        self.debt_displayed_value = self.debt_old_value  # Start animation from old value
-        
-        # Initialize debt screen animation
+
+        # Step 1-3: snapshot current debt (clamped) and set display start
+        current_debt = self.save_manager.get_remaining_debt()
+        self.debt_old_value = current_debt
+        self.debt_displayed_value = current_debt
+
+        # Step 4-5: apply payment and compute new debt
+        self.save_manager.pay_debt(self.debt_payment_amount)
+        new_debt = self.save_manager.get_remaining_debt()
+
+        # Step 6: choose quotes based on freedom state and set active text
+        self.debt_freedom = (new_debt == 0)
+        from settings import FREEDOM_QUOTES
+        quotes = FREEDOM_QUOTES if self.debt_freedom else PHARAOH_QUOTES
+        self.debt_quote_index = random.randint(0, len(quotes) - 1)
+        self.current_quote_text = quotes[self.debt_quote_index]
+
+        # Step 7: initialize animation timers
         self.debt_animation_timer = 0
         self.debt_shake_intensity = 0
         self.debt_scale = 1.0
-        self.debt_quote_index = random.randint(0, len(PHARAOH_QUOTES) - 1)
         self.debt_quote_char_index = 0
         self.debt_quote_timer = 0
         self.newly_unlocked_items = []  # Reset newly unlocked items
@@ -1102,13 +1111,12 @@ class Game:
         elif self.state == STATE_DEBT:
             # Debt screen animation logic
             self.debt_animation_timer += 1
-            
-            # Countdown animation (fast)
-            if self.debt_displayed_value > (self.debt_old_value - self.debt_payment_amount):
+
+            # Countdown animation (fast) towards actual remaining debt (already clamped)
+            target_value = self.save_manager.get_remaining_debt()
+            if self.debt_displayed_value > target_value:
                 decrement = max(1, self.debt_payment_amount // 60)  # Complete in ~60 frames
-                self.debt_displayed_value -= decrement
-                if self.debt_displayed_value < (self.debt_old_value - self.debt_payment_amount):
-                    self.debt_displayed_value = self.debt_old_value - self.debt_payment_amount
+                self.debt_displayed_value = max(target_value, self.debt_displayed_value - decrement)
                 
                 # Shake effect while counting
                 self.debt_shake_intensity = random.randint(-2, 2)
@@ -1132,7 +1140,8 @@ class Game:
             self.debt_quote_timer += 1
             if self.debt_quote_timer >= 3:  # Add character every 3 frames
                 self.debt_quote_timer = 0
-                if self.debt_quote_char_index < len(PHARAOH_QUOTES[self.debt_quote_index]):
+                # Check length of the ACTUAL text being displayed
+                if self.debt_quote_char_index < len(self.current_quote_text):
                     self.debt_quote_char_index += 1
             
         elif self.state == STATE_SCORING:

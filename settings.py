@@ -138,6 +138,15 @@ PHARAOH_QUOTES = [
     "The debt is eternal."
 ]
 
+# Quotes shown when debt is fully paid (freedom state)
+FREEDOM_QUOTES = [
+    "Artık özgürsün... ama ellerin hala titriyor.",
+    "Borç bitti. Bloklar bitmedi.",
+    "Özgürlük, başka bir hapishanedir.",
+    "Blok dizmek alışkanlık olmuş olsa gerek...",
+    "Firavun sustu. Şimdi sonsuzluk konuşuyor."
+]
+
 # --- COLLECTIBLES ---
 COLLECTIBLES = [
     {

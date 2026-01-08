@@ -1256,7 +1256,7 @@ class UIManager:
 
     def draw_debt_screen(self, surface, game):
         """Dramatic debt repayment screen with animations"""
-        from settings import PHARAOH_QUOTES
+        from settings import PHARAOH_QUOTES, FREEDOM_QUOTES
         
         # Black background with fade
         alpha = min(255, game.debt_animation_timer * 10)
@@ -1308,9 +1308,12 @@ class UIManager:
             label = self.font_bold.render("TOTAL DEBT", True, (150, 150, 150))
             surface.blit(label, label.get_rect(center=(cx, cy - 120)))
         
-        # Pharaoh quote with typewriter effect (bottom)
+        # Pharaoh / Freedom quote with typewriter effect (bottom)
         if game.debt_animation_timer > 90:
-            quote = PHARAOH_QUOTES[game.debt_quote_index]
+            quotes = FREEDOM_QUOTES if getattr(game, 'debt_freedom', False) else PHARAOH_QUOTES
+            # Guard against out-of-range
+            idx = max(0, min(game.debt_quote_index, len(quotes) - 1))
+            quote = quotes[idx]
             displayed_quote = quote[:game.debt_quote_char_index]
             
             quote_text = self.font_reg.render(displayed_quote, True, (200, 150, 50))
