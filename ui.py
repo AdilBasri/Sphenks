@@ -426,65 +426,109 @@ class UIManager:
 
     def draw_sidebar(self, surface, game):
         panel_rect = pygame.Rect(0, 0, SIDEBAR_WIDTH, VIRTUAL_H)
-        pygame.draw.rect(surface, SIDEBAR_BG_COLOR, panel_rect)
-        pygame.draw.line(surface, PANEL_BORDER, (SIDEBAR_WIDTH, 0), (SIDEBAR_WIDTH, VIRTUAL_H), 4)
-        cx = SIDEBAR_WIDTH // 2; y_cursor = 30
-        
-        # Show TRAINING mode indicator instead of LAYER when in training state
+        pygame.draw.rect(surface, (30, 25, 40), panel_rect)
+        pygame.draw.rect(surface, (100, 90, 110), panel_rect, 4)
+        cx = SIDEBAR_WIDTH // 2
+
+        # Color palette
+        gold = (255, 215, 140)
+        crimson = (220, 70, 70)
+        cyan = (90, 200, 255)
+        gray = (180, 180, 190)
+
+        layer_font = pygame.font.SysFont(FONT_NAME, 24, bold=True)
+        desc_font = pygame.font.SysFont(FONT_NAME, 12, bold=True)
+
+        # Layer label at top
         if game.state == STATE_TRAINING:
-            ante_txt = self.font_bold.render("TRAINING", True, (0, 255, 200))  # Cyan color
+            layer_txt = layer_font.render("TRAINING", True, cyan)
         elif game.endless_mode:
-            ante_txt = self.font_bold.render("∞", True, (255, 200, 50))  # Infinity symbol
+            layer_txt = layer_font.render("LAYER ∞", True, gold)
         else:
-            ante_txt = self.font_bold.render(f"LAYER {game.ante} / 8", True, (200, 200, 200))
-        
-        surface.blit(ante_txt, ante_txt.get_rect(center=(cx, y_cursor))); y_cursor += 30
-        round_name = ["Small Quota", "Big Quota", "Boss Tribute"][game.round - 1]
+            layer_txt = layer_font.render(f"LAYER {game.ante} / 8", True, gold)
+        surface.blit(layer_txt, layer_txt.get_rect(center=(cx, 35)))
+
+        # Info section
+        y_cursor = 80
+        boss_desc = None
+        round_name = ["Small Quota", "Big Tribute", "Judgment"][game.round - 1]
         round_col = TOTAL_COLOR
         if game.round == 3 and game.active_boss_effect:
             boss_key = game.active_boss_effect
-            boss_info = BOSS_DATA.get(boss_key, {'color': (255,0,0), 'desc': 'Unknown'})
-            round_name = boss_key; round_col = boss_info['color']
-            desc_font = pygame.font.SysFont(FONT_NAME, 11, bold=True)
-            desc_lbl = desc_font.render(boss_info['desc'], True, (255, 150, 150))
-            surface.blit(desc_lbl, desc_lbl.get_rect(center=(cx, y_cursor + 20))); y_cursor += 15
-        round_lbl = self.font_bold.render(round_name, True, round_col)
-        surface.blit(round_lbl, round_lbl.get_rect(center=(cx, y_cursor))); y_cursor += 30
-        goal_lbl = self.font_small.render(f"Goal: {game.level_target}", True, (150, 150, 150))
-        surface.blit(goal_lbl, goal_lbl.get_rect(center=(cx, y_cursor))); y_cursor += 40
-        score_box_h = 140
-        score_box = pygame.Rect(10, y_cursor, SIDEBAR_WIDTH - 20, score_box_h)
-        pygame.draw.rect(surface, SCORING_BOX_BG, score_box, border_radius=10)
-        pygame.draw.rect(surface, PANEL_BORDER, score_box, 2, border_radius=10)
-        box_cx = score_box.centerx; box_y = score_box.y + 15
+            boss_info = BOSS_DATA.get(boss_key, {'color': crimson, 'desc': 'Unknown'})
+            round_name = boss_key
+            round_col = boss_info.get('color', crimson)
+            boss_desc = boss_info.get('desc', '')
+        name_txt = self.font_bold.render(round_name, True, round_col)
+        surface.blit(name_txt, name_txt.get_rect(center=(cx, y_cursor)))
+        y_cursor += 25
+        if boss_desc:
+            desc_lbl = desc_font.render(boss_desc, True, gray)
+            surface.blit(desc_lbl, desc_lbl.get_rect(center=(cx, y_cursor)))
+            y_cursor += 30
+        else:
+            y_cursor += 40
+
+        goal_lbl = self.font_small.render(f"Quota: {game.level_target}", True, gray)
+        surface.blit(goal_lbl, goal_lbl.get_rect(center=(cx, y_cursor)))
+        y_cursor += 14  # tighter spacing to lift score panel
+
+        # Separator line
+        pygame.draw.line(surface, (100, 90, 110), (8, y_cursor + 8), (SIDEBAR_WIDTH - 8, y_cursor + 8), 3)
+
+        # Stone tablet scoring panel (fixed higher start to avoid menu overlap)
+        y_cursor = 190
+        tablet_rect = pygame.Rect(10, y_cursor, SIDEBAR_WIDTH - 20, 190)
+        pygame.draw.rect(surface, (40, 34, 48), tablet_rect, border_radius=12)
+        pygame.draw.rect(surface, (100, 90, 110), tablet_rect, 3, border_radius=12)
+        inner_rect = tablet_rect.inflate(-12, -12)
+        pygame.draw.rect(surface, (25, 22, 32), inner_rect, border_radius=10)
+
+        # Titles row
+        title_y = inner_rect.y + 8
+        third = inner_rect.width // 3
+        left_x = inner_rect.x + third // 2
+        mid_x = inner_rect.centerx
+        right_x = inner_rect.right - third // 2
+        labor_lbl = self.font_small.render("LABOR", True, cyan)
+        favor_lbl = self.font_small.render("FAVOR", True, crimson)
+        x_lbl = self.font_small.render("X", True, (240, 240, 240))
+        surface.blit(labor_lbl, labor_lbl.get_rect(center=(left_x, title_y)))
+        surface.blit(x_lbl, x_lbl.get_rect(center=(mid_x, title_y)))
+        surface.blit(favor_lbl, favor_lbl.get_rect(center=(right_x, title_y)))
+
+        # Values row
+        val_y = title_y + 22
         chips_val = game.scoring_data['base'] if game.state == STATE_SCORING else 0
-        chips_txt = self.font_score.render(str(chips_val), True, CHIPS_COLOR)
-        surface.blit(chips_txt, chips_txt.get_rect(midleft=(score_box.x + 15, box_y)))
-        lbl_chips = self.font_small.render("Labor", True, CHIPS_COLOR)
-        surface.blit(lbl_chips, lbl_chips.get_rect(midleft=(score_box.x + 15, box_y + 15)))
-        x_txt = self.font_bold.render("X", True, (255,255,255))
-        surface.blit(x_txt, x_txt.get_rect(center=(box_cx, box_y + 10)))
         mult_val = game.scoring_data['mult'] if game.state == STATE_SCORING else 0.0
-        mult_txt = self.font_score.render(f"{mult_val:.1f}", True, MULT_COLOR)
-        surface.blit(mult_txt, mult_txt.get_rect(midright=(score_box.right - 15, box_y)))
-        lbl_mult = self.font_small.render("Favor", True, MULT_COLOR)
-        surface.blit(lbl_mult, lbl_mult.get_rect(midright=(score_box.right - 15, box_y + 15)))
-        box_y += 50
-        total_lbl = self.font_reg.render("Total", True, (200, 200, 200))
-        surface.blit(total_lbl, total_lbl.get_rect(center=(box_cx, box_y)))
-        box_y += 30
-        shake = 0
-        if game.state == STATE_SCORING: shake = random.randint(-1, 1)
         hand_total = game.scoring_data['total'] if game.state == STATE_SCORING else 0
+        labor_val = self.font_score.render(str(chips_val), True, cyan)
+        favor_val = self.font_score.render(f"{mult_val:.1f}", True, crimson)
+        surface.blit(labor_val, labor_val.get_rect(center=(left_x, val_y)))
+        surface.blit(favor_val, favor_val.get_rect(center=(right_x, val_y)))
+
+        # Divider under values
+        divider_y = val_y + 22
+        pygame.draw.line(surface, (80, 70, 90), (inner_rect.left + 10, divider_y), (inner_rect.right - 10, divider_y), 2)
+
+        # Total score
+        total_label = self.font_reg.render("TOTAL SCORE", True, gold)
+        total_y = divider_y + 14
+        surface.blit(total_label, total_label.get_rect(center=(mid_x, total_y)))
+        shake = random.randint(-1, 1) if game.state == STATE_SCORING else 0
         total_txt = self.font_big.render(str(hand_total), True, TOTAL_COLOR)
-        surface.blit(total_txt, total_txt.get_rect(center=(box_cx + shake, box_y + shake)))
-        y_cursor += score_box_h + 20
-        lbl_round_score = self.font_reg.render("Shift Score", True, (150, 150, 150))
-        surface.blit(lbl_round_score, lbl_round_score.get_rect(center=(cx, y_cursor))); y_cursor += 20
-        sc_col = (255, 255, 255)
-        if game.score >= game.level_target: sc_col = (100, 255, 100)
+        surface.blit(total_txt, total_txt.get_rect(center=(mid_x + shake, total_y + 24 + shake)))
+
+        y_cursor = tablet_rect.bottom + 12
+
+        lbl_round_score = self.font_reg.render("Shift Score", True, gray)
+        surface.blit(lbl_round_score, lbl_round_score.get_rect(center=(cx, y_cursor)))
+        y_cursor += 20
+        sc_col = (255, 255, 255) if game.score < game.level_target else (100, 255, 100)
         curr_score_txt = self.font_score.render(str(game.score), True, sc_col)
         surface.blit(curr_score_txt, curr_score_txt.get_rect(center=(cx, y_cursor)))
+
+        # Menu button
         menu_btn = pygame.Rect(20, VIRTUAL_H - 50, SIDEBAR_WIDTH - 40, 35)
         col = (70, 60, 80)
         if menu_btn.collidepoint(pygame.mouse.get_pos()): col = (90, 80, 100)
@@ -744,13 +788,13 @@ class UIManager:
         overlay.fill((10, 10, 15, 240))
         surface.blit(overlay, (0,0))
         cx = VIRTUAL_W // 2
-        title = self.title_font.render(f"ANTE {game.ante}", True, (255, 255, 255))
+        title = self.title_font.render(f"LAYER {game.ante}", True, (255, 255, 255))
         surface.blit(title, title.get_rect(center=(cx, 50)))
         
         panel_w, panel_h = 200, 300
         gap = 30
         start_x = cx - (1.5 * panel_w) - gap
-        blinds = ['Small Blind', 'Big Blind', 'Boss Blind']
+        blinds = ['Small Quota', 'Big Tribute', 'Judgment']
         colors = [(100, 150, 255), (255, 150, 50), (255, 50, 50)]
         targets = [game.get_blind_target(1), game.get_blind_target(2), game.get_blind_target(3)]
         
@@ -838,11 +882,11 @@ class UIManager:
         
         # Right-side panel geometry
         panel_w = 230
-        panel_h = VIRTUAL_H - 40
+        panel_h = VIRTUAL_H - 140  # Leave room above the hand area
         panel_x = VIRTUAL_W - panel_w - 10
         panel_y = 20
         
-        # Define tutorial content for all 6 steps
+        # Define tutorial content for all 7 steps (0-based)
         tutorial_data = {
             0: {
                 'title': "WELCOME TO SPHENKS!",
@@ -859,20 +903,27 @@ class UIManager:
                 'condition_text': "Press [R] or [E] to continue"
             },
             2: {
+                'title': "PURIFY THE HAND",
+                'text': "Sometimes you need new tools.\n\nDrag a block to the TRASH ICON (Red Square) to discard it and draw new ones.",
+                'highlight': game.trash_rect.inflate(10, 10),
+                'show_continue': False,
+                'condition_text': None
+            },
+            3: {
                 'title': "SCORING & STRATEGY",
-                'text': "Clear lines horizontally or vertically to earn points.\nMatch block colors for bonus multipliers!\nReach your target score to advance to the next blind.",
+                'text': "Clear lines horizontally or vertically to earn points.\nMatch block colors for bonus multipliers!\nReach your target score to advance to the next quota.",
                 'highlight': pygame.Rect(SIDEBAR_WIDTH + 50, 50, GRID_WIDTH + 50, GRID_HEIGHT + 50),
                 'show_continue': True,
                 'condition_text': None
             },
-            3: {
+            4: {
                 'title': "MEET YOUR ARSENAL",
                 'text': "You now have a JOKER (permanent passive bonus) and a RUNE (one-time consumable effect).\n\nJokers power up your plays.\nRunes trigger when you apply them to block cells.",
                 'highlight': pygame.Rect(SIDEBAR_WIDTH, 50, SIDEBAR_WIDTH - 10, 120),
                 'show_continue': True,
                 'condition_text': None
             },
-            4: {
+            5: {
                 'title': "USE YOUR RUNE",
                 'text': "Drag the highlighted RUNE to a cell on one of your blocks.\n\nThis demonstrates how consumables enhance your blocks.",
                 'highlight': None,  # Will be drawn dynamically below
@@ -880,9 +931,9 @@ class UIManager:
                 'condition_text': "Drag the rune to a block cell",
                 'draw_rune_highlight': True  # Special flag for rune highlighting
             },
-            5: {
+            6: {
                 'title': "YOU'RE READY!",
-                'text': "You now understand the core mechanics:\n\n• Drag blocks to the grid\n• Rotate and flip with [R] and [E]\n• Use Runes to enhance your strategy\n• Build up your deck with Jokers\n\nGood luck, puzzle master!",
+                'text': "You now understand the core mechanics:\n\n• Drag blocks to the grid\n• Rotate and flip with [R] and [E]\n• Discard to purify your hand\n• Use Runes to enhance your strategy\n• Build up your deck with Jokers\n\nGood luck, puzzle master!",
                 'highlight': None,
                 'show_continue': True,
                 'condition_text': None
@@ -924,7 +975,7 @@ class UIManager:
         surface.blit(title, title_rect)
         
         # Step indicator
-        step_text = self.font_small.render(f"Step {step + 1}/6", True, (150, 150, 150))
+        step_text = self.font_small.render(f"Step {step + 1}/7", True, (150, 150, 150))
         step_rect = step_text.get_rect(centerx=panel_rect.centerx, top=title_rect.bottom + 5)
         surface.blit(step_text, step_rect)
         

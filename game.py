@@ -520,10 +520,7 @@ class Game:
             self.save_manager.save_data()
 
     def handle_events(self):
-        # CRITICAL: Prevent ghost clicks during state transitions
-        if self.input_cooldown > 0:
-            pygame.event.clear()  # Discard events during cooldown
-            return
+        # Note: Do not discard events during cooldown; gate actions instead
         
         # Get mouse position directly - no coordinate conversion needed
         self.mouse_x, self.mouse_y = pygame.mouse.get_pos()
@@ -547,22 +544,23 @@ class Game:
             if self.state == STATE_INTRO:
                 # Allow skipping intro with any key press or mouse click
                 if event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
-                    self.input_cooldown = 20  # Prevent ghost clicks after skip
-                    pygame.mixer.music.stop()  # Stop intro audio
-                    self.intro_manager.active = False
-                    self.intro_manager.close()
-                    self.state = STATE_MENU
-                    # Start background music
-                    pygame.mixer.music.load("assets/music.mp3")
-                    pygame.mixer.music.play(-1)
-                    self.audio.play('select')
+                    if self.input_cooldown == 0:
+                        self.input_cooldown = 20  # Prevent ghost clicks after skip
+                        pygame.mixer.music.stop()  # Stop intro audio
+                        self.intro_manager.active = False
+                        self.intro_manager.close()
+                        self.state = STATE_MENU
+                        # Start background music
+                        pygame.mixer.music.load("assets/music.mp3")
+                        pygame.mixer.music.play(-1)
+                        self.audio.play('select')
 
             if self.state == STATE_MENU:
                 # Handle menu button clicks on mouse down for snappy response
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     if hasattr(self.ui, 'menu_buttons'):
                         for rect, text in self.ui.menu_buttons:
-                            if rect.collidepoint(mx, my):
+                            if rect.collidepoint(mx, my) and self.input_cooldown == 0:
                                 if text == "PLAY": 
                                     self.start_new_game()
                                 elif text == "SETTINGS":
@@ -586,7 +584,7 @@ class Game:
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     if hasattr(self.ui, 'select_buttons'):
                         for btn in self.ui.select_buttons:
-                            if btn.collidepoint(mx, my):
+                            if btn.collidepoint(mx, my) and self.input_cooldown == 0:
                                 self.start_round()
 
             elif self.state == STATE_PAUSE:
@@ -594,11 +592,12 @@ class Game:
                     if hasattr(self.ui, 'pause_buttons'):
                         yes = self.ui.pause_buttons['YES']
                         no = self.ui.pause_buttons['NO']
-                        if yes.collidepoint(mx, my):
+                        if yes.collidepoint(mx, my) and self.input_cooldown == 0:
                             self.state = STATE_MENU
                             self.init_game_session_data()
                             self.input_cooldown = 15  # Prevent ghost click on PLAY button
-                        elif no.collidepoint(mx, my): self.state = STATE_PLAYING
+                        elif no.collidepoint(mx, my) and self.input_cooldown == 0:
+                            self.state = STATE_PLAYING
             
             elif self.state == STATE_TRAINING:
                 # --- Generic input handling first to avoid softlocks ---
@@ -612,6 +611,9 @@ class Game:
                         self.flip_held_block()
 
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if self.input_cooldown > 0:
+                        # Ignore game interactions during cooldown, but do not discard event
+                        continue
                     rune_clicked = False
                     block_clicked = False
 
@@ -636,25 +638,33 @@ class Game:
                                 break
 
                     # Step progression clicks (only if overlay active and no pickup happened)
-                    if getattr(self, 'tutorial_active', True) and self.tutorial_step in [2, 3, 5] and not rune_clicked and not block_clicked:
+                    if getattr(self, 'tutorial_active', True) and self.tutorial_step in [3, 4, 6] and not rune_clicked and not block_clicked and self.input_cooldown == 0:
                         self.audio.play('select')
                         self.tutorial_step += 1
 
                 if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-                    # Rune drop handling first
+                    # Rune drop handling first (apply to block cell)
                     if self.held_rune and self.held_rune.dragging:
-                        if self.tutorial_step == 4:
-                            rune_x, rune_y = mx, my
-                            for b in self.blocks:
-                                if b.rect.collidepoint(rune_x, rune_y):
-                                    self.tutorial_rune_applied = True
-                                    self.audio.play('place')
-                                    break
+                        for b in self.blocks:
+                            if b.rect.collidepoint(mx, my):
+                                rel_x = mx - b.visual_x
+                                rel_y = my - b.visual_y
+                                cell_col = int(rel_x // TILE_SIZE)
+                                cell_row = int(rel_y // TILE_SIZE)
+                                if 0 <= cell_row < b.rows and 0 <= cell_col < b.cols:
+                                    if b.matrix[cell_row][cell_col] == 1:
+                                        b.runes[(cell_row, cell_col)] = self.held_rune
+                                        if self.held_rune in self.consumables:
+                                            self.consumables.remove(self.held_rune)
+                                        self.tutorial_rune_applied = True
+                                        self.audio.play('select')
+                                        break
                         self.held_rune.dragging = False
+                        self.held_rune = None
 
                     # Block drop handling
                     if self.held_block:
-                        if self.tutorial_step == 0:
+                        if self.tutorial_step == 0 or self.tutorial_step >= 5:
                             cur_x = mx - self.held_block.offset_x
                             cur_y = my - self.held_block.offset_y
                             check_x = cur_x + (TILE_SIZE / 2)
@@ -665,12 +675,29 @@ class Game:
                                 self.grid.place_block(self.held_block, gr, gc)
                                 self.blocks.remove(self.held_block)
                                 self.audio.play('place')
+                                if self.tutorial_step == 5:
+                                    self.tutorial_step = 6
+                                elif self.tutorial_step == 0:
+                                    self.tutorial_step = 1
                                 self.held_block = None
-                                self.tutorial_step = 1
                             else:
                                 self.held_block.dragging = False
                                 self.position_blocks_in_hand()
                                 self.held_block = None
+                        elif self.tutorial_step == 2 and self.trash_rect.collidepoint(mx, my):
+                            # Tutorial discard: recycle hand immediately and advance
+                            if self.held_block in self.blocks:
+                                self.blocks.remove(self.held_block)
+                            try:
+                                new_shape = self.get_smart_block_key()
+                            except Exception:
+                                new_shape = random.choice(['I', 'DOT', 'L'])
+                            self.blocks.append(Block(new_shape))
+                            self.position_blocks_in_hand()
+                            self.audio.play('select')
+                            self.tutorial_step = 3
+                            self.held_block = None
+                            return
                         else:
                             self.held_block.dragging = False
                             self.position_blocks_in_hand()
@@ -685,8 +712,11 @@ class Game:
                         self.flip_held_block()
                 
                 if event.type == pygame.MOUSEBUTTONDOWN:
-                    if hasattr(self, 'menu_btn_rect') and self.menu_btn_rect.collidepoint(mx, my): self.state = STATE_PAUSE
+                    if hasattr(self, 'menu_btn_rect') and self.menu_btn_rect.collidepoint(mx, my) and self.input_cooldown == 0:
+                        self.state = STATE_PAUSE
                     if event.button == 1: 
+                        if self.input_cooldown > 0:
+                            continue
                         # --- 1. Rünleri Kontrol Et (Sürükleme) ---
                         rune_clicked = False
                         for r in self.consumables:
@@ -888,6 +918,8 @@ class Game:
 
             elif self.state == STATE_SHOP:
                 if event.type == pygame.MOUSEBUTTONDOWN:
+                    if self.input_cooldown > 0:
+                        continue
                     for t in self.shop_totems:
                         if t.rect.collidepoint(mx, my): self.buy_totem(t)
                     # Rün Satın Alma
@@ -900,7 +932,7 @@ class Game:
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     # Check if continue button was clicked (handled by UI)
                     if hasattr(self.ui, 'debt_continue_button'):
-                        if self.ui.debt_continue_button.collidepoint(mx, my):
+                        if self.ui.debt_continue_button.collidepoint(mx, my) and self.input_cooldown == 0:
                             self.audio.play('select')
                             self.continue_from_debt()
                             self.state = STATE_ROUND_SELECT
@@ -910,7 +942,7 @@ class Game:
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     # Check if endless mode button was clicked
                     if hasattr(self.ui, 'demo_end_button'):
-                        if self.ui.demo_end_button.collidepoint(mx, my):
+                        if self.ui.demo_end_button.collidepoint(mx, my) and self.input_cooldown == 0:
                             self.audio.play('select')
                             self.continue_to_endless()
                             self.input_cooldown = 15
@@ -919,7 +951,7 @@ class Game:
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     # Check if back button was clicked
                     if hasattr(self.ui, 'collection_back_button'):
-                        if self.ui.collection_back_button.collidepoint(mx, my):
+                        if self.ui.collection_back_button.collidepoint(mx, my) and self.input_cooldown == 0:
                             self.audio.play('select')
                             self.state = STATE_MENU
                 
@@ -935,6 +967,8 @@ class Game:
             
             elif self.state == STATE_SETTINGS:
                 if event.type == pygame.MOUSEBUTTONDOWN and hasattr(self.ui, 'settings_buttons'):
+                    if self.input_cooldown > 0:
+                        continue
                     btns = self.ui.settings_buttons
                     
                     # Fullscreen toggle
@@ -995,7 +1029,7 @@ class Game:
         diff = self.score - self.visual_score
         if diff > 0: self.visual_score += max(1, diff // 5)
         
-        TOTAL_TUTORIAL_STEPS = 6
+        TOTAL_TUTORIAL_STEPS = 7
 
         if self.state == STATE_INTRO:
             playing = self.intro_manager.update()
@@ -1024,9 +1058,9 @@ class Game:
                 self.tutorial_step = 2
                 self.tutorial_key_pressed = False
             
-            # Step 3: Spawn demo items (Joker + Rune) - only once
-            # Also check step 4 to ensure rune persists if player advances
-            if self.tutorial_step in [3, 4] and len(self.consumables) == 0:
+            # Step 4: Spawn demo items (Joker + Rune) - only once
+            # Also check step 5 to ensure rune persists if player advances
+            if self.tutorial_step in [4, 5] and len(self.consumables) == 0:
                 from runes import Rune
                 self.consumables.append(Rune('rune_fire'))
                 self.tutorial_rune_applied = False  # Reset for step 4
@@ -1036,9 +1070,9 @@ class Game:
                     r.y = 60
                     r.rect = pygame.Rect(r.x, r.y, 40, 40)
             
-            # Step 4 progression: Advance when rune is applied
-            if self.tutorial_step == 4 and self.tutorial_rune_applied:
-                self.tutorial_step = 5
+            # Step 5 progression: Advance when rune is applied
+            if self.tutorial_step == 5 and self.tutorial_rune_applied:
+                self.tutorial_step = 6
                 self.tutorial_rune_applied = False
 
             # Clamp and deactivate overlay when finished, then start a real run
