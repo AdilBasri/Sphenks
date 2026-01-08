@@ -5,7 +5,7 @@ import random
 import math
 import os
 from settings import *
-from settings import USE_FULLSCREEN, WINDOW_W, WINDOW_H, STATE_DEBT, PHARAOH_QUOTES, COLLECTIBLES, STATE_COLLECTION, STATE_SETTINGS, RESOLUTIONS
+from settings import USE_FULLSCREEN, WINDOW_W, WINDOW_H, STATE_DEBT, PHARAOH_QUOTES, COLLECTIBLES, STATE_COLLECTION, STATE_SETTINGS, STATE_TRAINING, RESOLUTIONS
 from grid import Grid
 from block import Block
 from effects import ParticleSystem, BossAtmosphere
@@ -76,8 +76,20 @@ class Game:
         
         self.force_omega_shop = False 
         
-        self.state = STATE_MENU 
-        self.init_game_session_data() 
+        self.input_cooldown = 0
+        self.tutorial_step = 0  # Tutorial progress tracker
+        
+        # Check if player has completed tutorial
+        if not self.save_manager.data.get('tutorial_complete', False):
+            self.state = STATE_TRAINING  # New player -> Training mode
+        else:
+            self.state = STATE_MENU  # Returning player -> Main menu
+        
+        self.init_game_session_data()
+        
+        # Initialize tutorial mode if needed
+        if self.state == STATE_TRAINING:
+            self.init_tutorial_mode() 
 
     def load_high_score(self):
         if os.path.exists("highscore.txt"):
@@ -137,6 +149,30 @@ class Game:
         self.debt_quote_char_index = 0
         self.debt_quote_timer = 0
         self.newly_unlocked_items = []  # Items unlocked in this debt screen
+
+    def init_tutorial_mode(self):
+        """Initialize the tutorial with a simple setup for learning"""
+        # Reset tutorial progress
+        self.tutorial_step = 0
+        
+        # Give player some simple blocks to start
+        self.grid.reset()
+        self.blocks = []
+        self.held_block = None
+        
+        # Add 3 simple blocks to hand
+        tutorial_shapes = ['I', 'DOT', 'L']  # Simple shapes for learning
+        for shape in tutorial_shapes:
+            self.blocks.append(Block(shape))
+        
+        self.position_blocks_in_hand()
+        
+        # Set up simple game state
+        self.score = 0
+        self.visual_score = 0
+        self.void_count = 20  # Plenty for tutorial
+        self.combo_counter = 0
+        self.level_target = 100  # Tutorial target (not enforced)
 
     def get_blind_target(self, round_num):
         base_target = 300 * (self.ante ** 1.3)
@@ -432,6 +468,11 @@ class Game:
         self.save_manager.save_data()
 
     def handle_events(self):
+        # CRITICAL: Prevent ghost clicks during state transitions
+        if self.input_cooldown > 0:
+            pygame.event.clear()  # Discard events during cooldown
+            return
+        
         # Get mouse position directly - no coordinate conversion needed
         self.mouse_x, self.mouse_y = pygame.mouse.get_pos()
         mx, my = self.mouse_x, self.mouse_y
@@ -469,6 +510,11 @@ class Game:
                                 elif text == "COLLECTION":
                                     self.audio.play('select')
                                     self.state = STATE_COLLECTION
+                                elif text == "TRAINING":
+                                    self.audio.play('select')
+                                    self.state = STATE_TRAINING
+                                    self.input_cooldown = 15  # Prevent accidental clicks during transition
+                                    self.init_tutorial_mode()  # Initialize practice session (no save data affected)
                                 elif text == "EXIT": 
                                     sys.exit()
 
@@ -485,8 +531,68 @@ class Game:
                         yes = self.ui.pause_buttons['YES']
                         no = self.ui.pause_buttons['NO']
                         if yes.collidepoint(mx, my):
-                            self.state = STATE_MENU; self.init_game_session_data()
-                        elif no.collidepoint(mx, my): self.state = STATE_PLAYING 
+                            self.state = STATE_MENU
+                            self.init_game_session_data()
+                            self.input_cooldown = 15  # Prevent ghost click on PLAY button
+                        elif no.collidepoint(mx, my): self.state = STATE_PLAYING
+            
+            elif self.state == STATE_TRAINING:
+                # Tutorial event handling
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    # Step 0: Drag block to grid
+                    if self.tutorial_step == 0:
+                        for b in self.blocks:
+                            if b.rect.collidepoint(mx, my):
+                                self.held_block = b
+                                b.dragging = True
+                                b.offset_x = mx - b.rect.x
+                                b.offset_y = my - b.rect.y
+                                self.audio.play('select')
+                    
+                    # Steps 1-2: Click to continue
+                    elif self.tutorial_step in [1, 2]:
+                        self.tutorial_step += 1
+                        self.audio.play('select')
+                    
+                    # Step 3: Finish tutorial
+                    elif self.tutorial_step == 3:
+                        self.save_manager.data['tutorial_complete'] = True
+                        self.save_manager.save_data()
+                        self.state = STATE_MENU
+                        self.init_game_session_data()
+                        self.tutorial_step = 0
+                        self.input_cooldown = 15
+                        self.audio.play('select')
+                
+                elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                    # Step 0: Complete when block placed on grid
+                    if self.tutorial_step == 0 and self.held_block:
+                        cur_x = mx - self.held_block.offset_x
+                        cur_y = my - self.held_block.offset_y
+                        check_x = cur_x + (TILE_SIZE / 2)
+                        check_y = cur_y + (TILE_SIZE / 2)
+                        gr, gc = self.get_grid_pos(check_x, check_y)
+                        
+                        if gr is not None and gc is not None:
+                            if self.grid.is_valid_position(self.held_block, gr, gc):
+                                self.grid.place_block(self.held_block, gr, gc)
+                                self.blocks.remove(self.held_block)
+                                self.audio.play('place')
+                                self.held_block = None
+                                self.tutorial_step = 1  # Advance to next step
+                            else:
+                                self.held_block.dragging = False
+                                self.position_blocks_in_hand()
+                                self.held_block = None
+                        else:
+                            self.held_block.dragging = False
+                            self.position_blocks_in_hand()
+                            self.held_block = None
+                
+                elif event.type == pygame.MOUSEMOTION:
+                    if self.held_block and self.held_block.dragging:
+                        # Block dragging handled in update
+                        pass 
 
             elif self.state == STATE_PLAYING:
                 if event.type == pygame.KEYDOWN:
@@ -712,6 +818,7 @@ class Game:
                             self.audio.play('select')
                             self.continue_from_debt()
                             self.state = STATE_ROUND_SELECT
+                            self.input_cooldown = 15  # Prevent ghost click on round select
             
             elif self.state == STATE_COLLECTION:
                 if event.type == pygame.MOUSEBUTTONDOWN:
@@ -777,6 +884,10 @@ class Game:
                 if event.type == pygame.MOUSEBUTTONDOWN: self.state = STATE_MENU; self.init_game_session_data()
 
     def update(self):
+        # Decrease input cooldown
+        if self.input_cooldown > 0:
+            self.input_cooldown -= 1
+        
         self.ui.update()
         self.particle_system.update()
         if self.screen_shake > 0: self.screen_shake -= 1
@@ -786,7 +897,15 @@ class Game:
         diff = self.score - self.visual_score
         if diff > 0: self.visual_score += max(1, diff // 5)
         
-        if self.state == STATE_PLAYING:
+        if self.state == STATE_TRAINING:
+            # Tutorial mode - similar updates to PLAYING but controlled progression
+            for b in self.blocks: b.update()
+            if self.held_rune and self.held_rune.dragging:
+                mx, my = pygame.mouse.get_pos()
+                self.held_rune.x = mx
+                self.held_rune.y = my
+        
+        elif self.state == STATE_PLAYING:
             for b in self.blocks: b.update()
             # Rune dragging - use direct mouse coordinates (no conversion needed)
             if self.held_rune and self.held_rune.dragging:
@@ -844,6 +963,44 @@ class Game:
         
         if self.state == STATE_MENU:
             self.ui.draw_menu(self.screen, self.high_score)
+        elif self.state == STATE_TRAINING:
+            # Draw training mode (game board + tutorial overlay)
+            boss_shake_x, boss_shake_y = self.particle_system.atmosphere.get_shake_offset()
+            normal_shake_x = random.randint(-self.screen_shake, self.screen_shake) if self.screen_shake > 0 else 0
+            normal_shake_y = random.randint(-self.screen_shake, self.screen_shake) if self.screen_shake > 0 else 0
+            
+            total_shake_x = boss_shake_x + normal_shake_x
+            total_shake_y = boss_shake_y + normal_shake_y
+
+            self.ui.draw_sidebar(self.screen, self)
+            self.ui.draw_hand_bg(self.screen)
+            self.ui.draw_top_bar(self.screen, self)
+            
+            theme = self.get_current_theme()
+            self.grid.draw(self.screen, total_shake_x, total_shake_y, theme)
+            
+            for b in self.blocks:
+                if b != self.held_block: b.draw(self.screen, 0, 0, 0.8, 255, theme['style'])
+            
+            if self.held_block and self.held_block.dragging:
+                cur_x = self.mouse_x - self.held_block.offset_x
+                cur_y = self.mouse_y - self.held_block.offset_y
+                check_x = cur_x + (TILE_SIZE / 2); check_y = cur_y + (TILE_SIZE / 2)
+                gr, gc = self.get_grid_pos(check_x, check_y)
+                if gr is not None and gc is not None:
+                    target_px = self.grid_offset_x + gc * TILE_SIZE
+                    target_py = self.grid_offset_y + gr * TILE_SIZE
+                    orig = self.held_block.rect.topleft
+                    self.held_block.rect.topleft = (target_px, target_py)
+                    if self.grid.is_valid_position(self.held_block, gr, gc):
+                        self.held_block.draw(self.screen, target_px, target_py, 1.0, 60, theme['style'])
+                    self.held_block.rect.topleft = orig
+            
+            self.particle_system.draw(self.screen)
+            self.ui.draw_hud_elements(self.screen, self)
+            
+            # Draw tutorial overlay on top
+            self.ui.draw_training_overlay(self.screen, self.tutorial_step)
         elif self.state == STATE_ROUND_SELECT:
             self.ui.draw_round_select(self.screen, self)
         elif self.state == STATE_DEBT:

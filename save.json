@@ -1,10 +1,11 @@
 {
     "total_debt": 1000000,
-    "debt_paid": 43315,
+    "debt_paid": 44085,
     "unlocked_items": [],
     "settings": {
         "fullscreen": true,
         "volume": 0.3075,
         "language": "EN"
-    }
+    },
+    "tutorial_complete": true
 }

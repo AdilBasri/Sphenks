@@ -15,6 +15,7 @@ class SaveManager:
             'total_debt': 1000000,
             'debt_paid': 0,
             'unlocked_items': [],
+            'tutorial_complete': False,
             'settings': {
                 'fullscreen': False,
                 'volume': 0.5,
