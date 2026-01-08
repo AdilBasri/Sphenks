@@ -31,129 +31,80 @@ class Game:
         # --- EKRAN AYARLARI ---
         # Always start in windowed mode (SCALED | RESIZABLE only)
         # pygame.SCALED automatically scales to window size without manual virtual surface
-        # pygame.RESIZABLE allows window resizing
-        # vsync=1 prevents screen tearing
-        flags = pygame.SCALED | pygame.RESIZABLE
-        
-        self.screen = pygame.display.set_mode((VIRTUAL_W, VIRTUAL_H), flags, vsync=1)
-        self.fullscreen = False
-        
-        # Apply fullscreen AFTER initialization if saved preference was True
-        # This "late toggle" avoids Mac Retina scaling glitches
-        if saved_fullscreen:
-            self.toggle_fullscreen()
-        
-        self.w = VIRTUAL_W
-        self.h = VIRTUAL_H
-        
-        pygame.display.set_caption(TITLE)
-        self.clock = pygame.time.Clock()
-        
-        self.crt = CRTManager()
-        self.audio = AudioManager()
-        self.ui = UIManager()
-        self.particle_system = ParticleSystem()
-        self.high_score = self.load_high_score()
-        
-        # Load save data and apply settings
-        self.save_data = self.save_manager.get_data()
-        self._apply_saved_settings()
-        
-        self.grid = Grid()
-        
-        play_area_center_x = SIDEBAR_WIDTH + (PLAY_AREA_W // 2)
-        play_area_center_y = VIRTUAL_H // 2
-        
-        grid_x = play_area_center_x - (GRID_WIDTH // 2)
-        grid_y = play_area_center_y - (GRID_HEIGHT // 2) - 20 
-        
-        self.grid_offset_x = grid_x
-        self.grid_offset_y = grid_y
-        self.grid.rect.topleft = (grid_x, grid_y)
-        
-        self.trash_rect = pygame.Rect(self.w - 80, self.h - 80, 40, 50)
-        self.menu_btn_rect = pygame.Rect(0,0,0,0)
-        
-        self.force_omega_shop = False 
-        
-        self.input_cooldown = 0
-        self.tutorial_step = 0  # Tutorial progress tracker
-        
-        # Check if player has completed tutorial
-        if not self.save_manager.data.get('tutorial_complete', False):
-            self.state = STATE_TRAINING  # New player -> Training mode
-        else:
-            self.state = STATE_MENU  # Returning player -> Main menu
-        
-        self.init_game_session_data()
-        
-        # Initialize tutorial mode if needed
-        if self.state == STATE_TRAINING:
-            self.init_tutorial_mode() 
-
-    def load_high_score(self):
-        if os.path.exists("highscore.txt"):
-            try:
-                with open("highscore.txt", "r") as f:
-                    return int(f.read())
-            except: return 0
-        return 0
-    
-    def save_high_score(self):
-        with open("highscore.txt", "w") as f: f.write(str(self.high_score))
-
-    def get_current_theme(self):
-        if self.ante >= NEW_WORLD_ANTE:
-            return THEMES['CRIMSON']
-        return THEMES['NEON']
-
-    def init_game_session_data(self):
-        self.credits = STARTING_CREDITS
-        self.totems = [] 
-        
-        # --- YENİ: RÜN ENVANTERİ ---
-        self.consumables = [] 
-        self.max_consumables = 3
-        self.held_rune = None # Sürüklenen rün
-        
-        self.score = 0
-        self.visual_score = 0
-        self.ante = 1
-        self.round = 1 
-        self.force_omega_shop = False
-        
-        self.boss_preview = random.choice(list(BOSS_DATA.keys()))
-        
-        self.screen_shake = 0
-        self.combo_counter = 0
-        self.scoring_data = {'base': 0, 'mult': 0, 'total': 0}
-        
-        self.current_boss = None 
-        self.active_boss_effect = None 
-        
-        self.grid.reset()
-        self.blocks = []
-        self.held_block = None
-        self.void_count = BASE_VOID_COUNT
-        self.is_edge_placement = False
-        self.last_placed_block_tag = 'NONE'
-        
-        # --- DEBT SCREEN VARIABLES ---
-        self.debt_old_value = 0
-        self.debt_displayed_value = 0
-        self.debt_animation_timer = 0
-        self.debt_payment_amount = 0
         self.debt_shake_intensity = 0
         self.debt_scale = 1.0
         self.debt_quote_index = 0
         self.debt_quote_char_index = 0
         self.debt_quote_timer = 0
         self.newly_unlocked_items = []  # Items unlocked in this debt screen
+        # Global input guard to prevent ghost clicks after state changes
+        self.input_cooldown = 0
+
+        # Core game state defaults
+        self.state = STATE_MENU
+        self.ante = 1
+        self.round = 1
+        self.force_omega_shop = False
+        self.max_consumables = 5
+        self.credits = 0
+        self.high_score = 0
+        self.screen_shake = 0
+        self.scoring_data = {'base': 0, 'mult': 0, 'total': 0}
+        self.fullscreen = False
+        self.theme = 'NEON'
+
+        # Display / systems
+        # Always start windowed; fullscreen is applied via a late toggle
+        flags = pygame.SCALED | pygame.RESIZABLE
+        self.screen = pygame.display.set_mode((VIRTUAL_W, VIRTUAL_H), flags, vsync=1)
+        pygame.display.set_caption(TITLE)
+        self.clock = pygame.time.Clock()
+        # Cache virtual dimensions for convenience where used
+        self.w = VIRTUAL_W
+        self.h = VIRTUAL_H
+        self.audio = AudioManager()
+        self.ui = UIManager()
+        self.crt = CRTManager()
+        self.particle_system = ParticleSystem()
+        
+        # Grid and positioning
+        self.grid = Grid()
+        self.grid.reset()
+        self.grid_offset_x = GRID_OFFSET_X
+        self.grid_offset_y = GRID_OFFSET_Y
+        self.held_block = None
+        self.held_rune = None
+        self.blocks = []
+        self.consumables = []
+        self.totems = []
+        self.shop_totems = []
+        self.shop_runes = []
+        self.active_boss_effect = None
+        self.boss_preview = None
+        self.trash_rect = pygame.Rect(SIDEBAR_WIDTH + PLAY_AREA_W - 50, VIRTUAL_H - HAND_BG_HEIGHT + 10, 40, 40)
+
+        # Core gameplay counters
+        self.score = 0
+        self.visual_score = 0
+        self.combo_counter = 0
+        self.level_target = 0
+        self.void_count = 0
+
+        # Apply saved fullscreen via safe late toggle (macOS Retina workaround)
+        if saved_fullscreen:
+            try:
+                self.set_fullscreen(True)
+            except Exception:
+                # Fallback: use existing toggle method
+                self.toggle_fullscreen()
 
     def init_tutorial_mode(self):
         """Initialize the tutorial with a simple setup for learning"""
         # Reset tutorial progress
         self.tutorial_step = 0
+        self.tutorial_key_pressed = False  # Track if player pressed R or E in step 1
+        self.tutorial_rune_applied = False  # Track if player applied rune in step 4
+        self.tutorial_active = True  # Overlay and step gating flag
         
         # Give player some simple blocks to start
         self.grid.reset()
@@ -173,6 +124,7 @@ class Game:
         self.void_count = 20  # Plenty for tutorial
         self.combo_counter = 0
         self.level_target = 100  # Tutorial target (not enforced)
+        self.consumables = []  # No runes initially (spawned in step 3)
 
     def get_blind_target(self, round_num):
         base_target = 300 * (self.ante ** 1.3)
@@ -183,6 +135,29 @@ class Game:
         elif round_num == 2: return int(adjusted_target * 1.5)
         elif round_num == 3: return int(adjusted_target * 2.5)
         return 0
+
+    def init_game_session_data(self):
+        """Reset per-session data for a fresh run"""
+        self.round = 1
+        self.ante = 1
+        self.score = 0
+        self.visual_score = 0
+        self.combo_counter = 0
+        self.level_target = self.get_blind_target(self.round)
+        self.void_count = BASE_VOID_COUNT
+        self.screen_shake = 0
+        self.scoring_data = {'base': 0, 'mult': 0, 'total': 0}
+        self.active_boss_effect = None
+        self.boss_preview = random.choice(list(BOSS_DATA.keys())) if 'BOSS_DATA' in globals() else None
+        self.blocks = []
+        self.consumables = []
+        self.totems = []
+        self.shop_totems = []
+        self.shop_runes = []
+        self.held_block = None
+        self.held_rune = None
+        self.grid.reset()
+        self.position_blocks_in_hand()
 
     def start_new_game(self):
         self.audio.play('select')
@@ -350,11 +325,15 @@ class Game:
         res_index = self.temp_settings['resolution_index']
         resolution = RESOLUTIONS[res_index]
         
-        # Apply display mode
-        if self.temp_settings['fullscreen']:
-            self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
-        else:
-            self.screen = pygame.display.set_mode(resolution)
+        # Do NOT recreate display or change flags here; use safe toggle only
+        # Apply fullscreen preference safely if it differs
+        try:
+            current_full = bool(self.screen.get_flags() & pygame.FULLSCREEN)
+        except Exception:
+            current_full = self.fullscreen
+        desired_full = bool(self.temp_settings['fullscreen'])
+        if desired_full != current_full:
+            self.set_fullscreen(desired_full)
         
         # Apply volume
         if hasattr(self.audio, 'set_volume'):
@@ -394,8 +373,24 @@ class Game:
                     b.visual_x = target_x
                     b.visual_y = target_y
 
+    def rotate_held_block(self):
+        """Rotate the currently held block (90 degrees clockwise)"""
+        if self.held_block:
+            self.held_block.rotate()
+            self.audio.play('select')
+
+    def flip_held_block(self):
+        """Flip the currently held block horizontally"""
+        if self.held_block:
+            # Flip the block matrix horizontally
+            self.held_block.matrix = [row[::-1] for row in self.held_block.matrix]
+            self.held_block.update_dimensions()
+            self.held_block.rect.width = self.held_block.width
+            self.held_block.rect.height = self.held_block.height
+            self.audio.play('select')
+
     def get_grid_pos(self, mx, my):
-        rx, ry = mx - self.grid_offset_x, my - self.grid_offset_y
+        rx, ry = mx - GRID_OFFSET_X, my - GRID_OFFSET_Y
         if 0 <= rx < GRID_WIDTH and 0 <= ry < GRID_HEIGHT:
             return int(ry // TILE_SIZE), int(rx // TILE_SIZE)
         return None, None
@@ -449,6 +444,14 @@ class Game:
             if r in self.shop_runes: self.shop_runes.remove(r)
             self.audio.play('select')
 
+    def get_current_theme(self):
+        """Return active theme definition"""
+        key = getattr(self, 'theme', 'NEON')
+        if key in THEMES:
+            return THEMES[key]
+        # Fallback to first theme
+        return list(THEMES.values())[0]
+
     def toggle_fullscreen(self):
         """Toggle between windowed and fullscreen mode"""
         self.fullscreen = not self.fullscreen
@@ -466,6 +469,23 @@ class Game:
         # Save fullscreen preference immediately
         self.save_manager.data['settings']['fullscreen'] = self.fullscreen
         self.save_manager.save_data()
+
+    def set_fullscreen(self, enabled: bool):
+        """Safely set fullscreen on/off using toggle, without recreating display.
+        - Does not call set_mode; avoids breaking the SCALED context on macOS Retina.
+        """
+        try:
+            current = bool(self.screen.get_flags() & pygame.FULLSCREEN)
+        except Exception:
+            current = self.fullscreen
+
+        if enabled != current:
+            # Use the safe SDL toggle path; do not change flags via set_mode
+            pygame.display.toggle_fullscreen()
+            self.fullscreen = enabled
+            # Persist preference
+            self.save_manager.data['settings']['fullscreen'] = self.fullscreen
+            self.save_manager.save_data()
 
     def handle_events(self):
         # CRITICAL: Prevent ghost clicks during state transitions
@@ -537,10 +557,30 @@ class Game:
                         elif no.collidepoint(mx, my): self.state = STATE_PLAYING
             
             elif self.state == STATE_TRAINING:
-                # Tutorial event handling
+                # --- Generic input handling first to avoid softlocks ---
+                if event.type == pygame.KEYDOWN:
+                    if self.tutorial_step == 1 and (event.key == pygame.K_r or event.key == pygame.K_e):
+                        self.tutorial_key_pressed = True
+                        self.audio.play('select')
+                    if event.key == pygame.K_r and self.held_block:
+                        self.rotate_held_block()
+                    if event.key == pygame.K_e and self.held_block:
+                        self.flip_held_block()
+
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    # Step 0: Drag block to grid
-                    if self.tutorial_step == 0:
+                    rune_clicked = False
+                    block_clicked = False
+
+                    # Allow rune pickup (step 4+)
+                    for r in self.consumables:
+                        if r.rect and r.rect.collidepoint(mx, my):
+                            self.held_rune = r
+                            r.dragging = True
+                            self.audio.play('select')
+                            rune_clicked = True
+                            break
+                    
+                    if not rune_clicked:
                         for b in self.blocks:
                             if b.rect.collidepoint(mx, my):
                                 self.held_block = b
@@ -548,38 +588,41 @@ class Game:
                                 b.offset_x = mx - b.rect.x
                                 b.offset_y = my - b.rect.y
                                 self.audio.play('select')
-                    
-                    # Steps 1-2: Click to continue
-                    elif self.tutorial_step in [1, 2]:
+                                block_clicked = True
+                                break
+
+                    # Step progression clicks (only if overlay active and no pickup happened)
+                    if getattr(self, 'tutorial_active', True) and self.tutorial_step in [2, 3, 5] and not rune_clicked and not block_clicked:
+                        self.audio.play('select')
                         self.tutorial_step += 1
-                        self.audio.play('select')
-                    
-                    # Step 3: Finish tutorial
-                    elif self.tutorial_step == 3:
-                        self.save_manager.data['tutorial_complete'] = True
-                        self.save_manager.save_data()
-                        self.state = STATE_MENU
-                        self.init_game_session_data()
-                        self.tutorial_step = 0
-                        self.input_cooldown = 15
-                        self.audio.play('select')
-                
-                elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-                    # Step 0: Complete when block placed on grid
-                    if self.tutorial_step == 0 and self.held_block:
-                        cur_x = mx - self.held_block.offset_x
-                        cur_y = my - self.held_block.offset_y
-                        check_x = cur_x + (TILE_SIZE / 2)
-                        check_y = cur_y + (TILE_SIZE / 2)
-                        gr, gc = self.get_grid_pos(check_x, check_y)
-                        
-                        if gr is not None and gc is not None:
-                            if self.grid.is_valid_position(self.held_block, gr, gc):
+
+                if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                    # Rune drop handling first
+                    if self.held_rune and self.held_rune.dragging:
+                        if self.tutorial_step == 4:
+                            rune_x, rune_y = mx, my
+                            for b in self.blocks:
+                                if b.rect.collidepoint(rune_x, rune_y):
+                                    self.tutorial_rune_applied = True
+                                    self.audio.play('place')
+                                    break
+                        self.held_rune.dragging = False
+
+                    # Block drop handling
+                    if self.held_block:
+                        if self.tutorial_step == 0:
+                            cur_x = mx - self.held_block.offset_x
+                            cur_y = my - self.held_block.offset_y
+                            check_x = cur_x + (TILE_SIZE / 2)
+                            check_y = cur_y + (TILE_SIZE / 2)
+                            gr, gc = self.get_grid_pos(check_x, check_y)
+                            
+                            if gr is not None and gc is not None and self.grid.is_valid_position(self.held_block, gr, gc):
                                 self.grid.place_block(self.held_block, gr, gc)
                                 self.blocks.remove(self.held_block)
                                 self.audio.play('place')
                                 self.held_block = None
-                                self.tutorial_step = 1  # Advance to next step
+                                self.tutorial_step = 1
                             else:
                                 self.held_block.dragging = False
                                 self.position_blocks_in_hand()
@@ -588,15 +631,14 @@ class Game:
                             self.held_block.dragging = False
                             self.position_blocks_in_hand()
                             self.held_block = None
-                
-                elif event.type == pygame.MOUSEMOTION:
-                    if self.held_block and self.held_block.dragging:
-                        # Block dragging handled in update
-                        pass 
 
             elif self.state == STATE_PLAYING:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE: self.state = STATE_PAUSE
+                    if event.key == pygame.K_r and self.held_block:
+                        self.rotate_held_block()
+                    if event.key == pygame.K_e and self.held_block:
+                        self.flip_held_block()
                 
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     if hasattr(self, 'menu_btn_rect') and self.menu_btn_rect.collidepoint(mx, my): self.state = STATE_PAUSE
@@ -676,8 +718,8 @@ class Game:
                         gr, gc = self.get_grid_pos(check_x, check_y)
 
                         if gr is not None and gc is not None:
-                            target_px = self.grid_offset_x + gc * TILE_SIZE
-                            target_py = self.grid_offset_y + gr * TILE_SIZE
+                            target_px = GRID_OFFSET_X + gc * TILE_SIZE
+                            target_py = GRID_OFFSET_Y + gr * TILE_SIZE
                             orig_pos = self.held_block.rect.topleft
                             self.held_block.rect.topleft = (target_px, target_py)
                             
@@ -748,11 +790,11 @@ class Game:
                                     
                                     theme = self.get_current_theme()
                                     for r in cr:
-                                        py = self.grid_offset_y + r*TILE_SIZE + TILE_SIZE//2
-                                        for c in range(GRID_SIZE): self.particle_system.create_explosion(self.grid_offset_x + c*TILE_SIZE, py, count=5)
+                                        py = GRID_OFFSET_Y + r*TILE_SIZE + TILE_SIZE//2
+                                        for c in range(GRID_SIZE): self.particle_system.create_explosion(GRID_OFFSET_X + c*TILE_SIZE, py, count=5)
                                     for c in cc:
-                                        px = self.grid_offset_x + c*TILE_SIZE + TILE_SIZE//2
-                                        for r in range(GRID_SIZE): self.particle_system.create_explosion(px, self.grid_offset_y + r*TILE_SIZE, count=5)
+                                        px = GRID_OFFSET_X + c*TILE_SIZE + TILE_SIZE//2
+                                        for r in range(GRID_SIZE): self.particle_system.create_explosion(px, GRID_OFFSET_Y + r*TILE_SIZE, count=5)
                                     
                                     extra_cash = 0
                                     for t in self.totems:
@@ -844,7 +886,10 @@ class Game:
                     
                     # Fullscreen toggle
                     if 'fullscreen' in btns and btns['fullscreen'].collidepoint(mx, my):
-                        self.temp_settings['fullscreen'] = not self.temp_settings['fullscreen']
+                        new_value = not self.temp_settings['fullscreen']
+                        # Apply safely immediately; do not recreate display or change flags directly
+                        self.set_fullscreen(new_value)
+                        self.temp_settings['fullscreen'] = new_value
                         self.audio.play('select')
                     
                     # Resolution arrows
@@ -897,13 +942,56 @@ class Game:
         diff = self.score - self.visual_score
         if diff > 0: self.visual_score += max(1, diff // 5)
         
+        TOTAL_TUTORIAL_STEPS = 6
+
         if self.state == STATE_TRAINING:
-            # Tutorial mode - similar updates to PLAYING but controlled progression
-            for b in self.blocks: b.update()
+            # Tutorial mode - update blocks and runes for animation
+            for b in self.blocks: 
+                b.update()
+            
+            # Update rune dragging
             if self.held_rune and self.held_rune.dragging:
                 mx, my = pygame.mouse.get_pos()
                 self.held_rune.x = mx
                 self.held_rune.y = my
+            
+            # Step 1 progression: Advance when player presses R or E
+            if self.tutorial_step == 1 and self.tutorial_key_pressed:
+                self.tutorial_step = 2
+                self.tutorial_key_pressed = False
+            
+            # Step 3: Spawn demo items (Joker + Rune) - only once
+            # Also check step 4 to ensure rune persists if player advances
+            if self.tutorial_step in [3, 4] and len(self.consumables) == 0:
+                from runes import Rune
+                self.consumables.append(Rune('rune_fire'))
+                self.tutorial_rune_applied = False  # Reset for step 4
+                # Force position update
+                for r in self.consumables:
+                    r.x = SIDEBAR_WIDTH + 20
+                    r.y = 60
+                    r.rect = pygame.Rect(r.x, r.y, 40, 40)
+            
+            # Step 4 progression: Advance when rune is applied
+            if self.tutorial_step == 4 and self.tutorial_rune_applied:
+                self.tutorial_step = 5
+                self.tutorial_rune_applied = False
+
+            # Clamp and deactivate overlay when finished, then start a real run
+            if self.tutorial_step >= TOTAL_TUTORIAL_STEPS:
+                self.tutorial_step = TOTAL_TUTORIAL_STEPS
+                self.tutorial_active = False
+                # Save tutorial completion and begin a normal game run (Ante 1)
+                try:
+                    self.save_manager.data['tutorial_complete'] = True
+                    self.save_manager.save_data()
+                except Exception:
+                    pass
+                # Optional start sound
+                if hasattr(self.audio, 'play'):
+                    self.audio.play('clear')
+                # Start a new game flow (round select)
+                self.start_new_game()
         
         elif self.state == STATE_PLAYING:
             for b in self.blocks: b.update()
@@ -972,35 +1060,63 @@ class Game:
             total_shake_x = boss_shake_x + normal_shake_x
             total_shake_y = boss_shake_y + normal_shake_y
 
+            # Layer 1: Background already drawn
+
+            # Layer 2: Grid
+            theme = self.get_current_theme()
+            self.grid.draw(self.screen, theme)
+
+            # Layer 3: Static UI (backgrounds only)
             self.ui.draw_sidebar(self.screen, self)
             self.ui.draw_hand_bg(self.screen)
             self.ui.draw_top_bar(self.screen, self)
-            
-            theme = self.get_current_theme()
-            self.grid.draw(self.screen, total_shake_x, total_shake_y, theme)
-            
-            for b in self.blocks:
-                if b != self.held_block: b.draw(self.screen, 0, 0, 0.8, 255, theme['style'])
-            
-            if self.held_block and self.held_block.dragging:
-                cur_x = self.mouse_x - self.held_block.offset_x
-                cur_y = self.mouse_y - self.held_block.offset_y
-                check_x = cur_x + (TILE_SIZE / 2); check_y = cur_y + (TILE_SIZE / 2)
-                gr, gc = self.get_grid_pos(check_x, check_y)
-                if gr is not None and gc is not None:
-                    target_px = self.grid_offset_x + gc * TILE_SIZE
-                    target_py = self.grid_offset_y + gr * TILE_SIZE
-                    orig = self.held_block.rect.topleft
-                    self.held_block.rect.topleft = (target_px, target_py)
-                    if self.grid.is_valid_position(self.held_block, gr, gc):
-                        self.held_block.draw(self.screen, target_px, target_py, 1.0, 60, theme['style'])
-                    self.held_block.rect.topleft = orig
-            
-            self.particle_system.draw(self.screen)
             self.ui.draw_hud_elements(self.screen, self)
             
-            # Draw tutorial overlay on top
-            self.ui.draw_training_overlay(self.screen, self.tutorial_step)
+            # Layer 4: Hand blocks and runes (ON TOP of UI backgrounds)
+            for b in self.blocks:
+                if b != self.held_block:
+                    b.draw(self.screen, 0, 0, 0.8, 255, theme['style'])
+            
+            # Layer 5: VFX/Particles (above grid and hand)
+            self.particle_system.draw(self.screen)
+
+            # Layer 6: Tutorial overlay (darkens background, shows instructions)
+            if getattr(self, 'tutorial_active', True):
+                self.ui.draw_training_overlay(self.screen, self, self.tutorial_step)
+            
+            # Layer 7: Held block (dragged item) on top of everything
+            if self.held_block:
+                if self.held_block.dragging:
+                    cur_x = self.mouse_x - self.held_block.offset_x
+                    cur_y = self.mouse_y - self.held_block.offset_y
+                    check_x = cur_x + (TILE_SIZE / 2)
+                    check_y = cur_y + (TILE_SIZE / 2)
+                    gr, gc = self.get_grid_pos(check_x, check_y)
+                    
+                    if gr is not None and gc is not None:
+                        # Show ghost on grid
+                        target_px = GRID_OFFSET_X + gc * TILE_SIZE
+                        target_py = GRID_OFFSET_Y + gr * TILE_SIZE
+                        orig = self.held_block.rect.topleft
+                        self.held_block.rect.topleft = (target_px, target_py)
+                        if self.grid.is_valid_position(self.held_block, gr, gc):
+                            self.held_block.draw(self.screen, target_px, target_py, 1.0, 60, theme['style'])
+                        self.held_block.rect.topleft = orig
+                    
+                    # Draw actual held block at cursor (on top of everything)
+                    self.held_block.draw(self.screen, cur_x, cur_y, 1.0, 255, theme['style'])
+                else:
+                    # Not dragging, draw at current position
+                    self.held_block.draw(self.screen, 0, 0, 1.0, 255, theme['style'])
+            
+            # Layer 8: Held rune on top
+            if self.held_rune and self.held_rune.dragging:
+                rx, ry = self.held_rune.x, self.held_rune.y
+                pygame.draw.circle(self.screen, (20, 20, 30), (rx, ry), 24)
+                pygame.draw.circle(self.screen, self.held_rune.color, (rx, ry), 22, 3)
+                font = pygame.font.SysFont("Arial", 22, bold=True)
+                txt = font.render(self.held_rune.icon, True, self.held_rune.color)
+                self.screen.blit(txt, txt.get_rect(center=(rx, ry)))
         elif self.state == STATE_ROUND_SELECT:
             self.ui.draw_round_select(self.screen, self)
         elif self.state == STATE_DEBT:
@@ -1017,79 +1133,82 @@ class Game:
             total_shake_x = boss_shake_x + normal_shake_x
             total_shake_y = boss_shake_y + normal_shake_y
 
+            # Layer 1: Background already drawn
+
+            # Layer 2: Grid
+            theme = self.get_current_theme()
+            self.grid.draw(self.screen, theme)
+
+            # Layer 3: Static UI backgrounds
             self.ui.draw_sidebar(self.screen, self)
             self.ui.draw_hand_bg(self.screen)
             self.ui.draw_top_bar(self.screen, self)
+            self.ui.draw_hud_elements(self.screen, self)
             
-            # --- RÜNLERİ ÇİZ (Envanter - Sürüklenmeyen) ---
-            if self.state == STATE_PLAYING:
+            # Layer 4: Hand (blocks and runes ON TOP of UI backgrounds)
+            if self.state in [STATE_PLAYING, STATE_TRAINING]:
                 start_x = SIDEBAR_WIDTH + 20
-                start_y = 60 # Totemlerin altı
+                start_y = 60
                 for i, r in enumerate(self.consumables):
                     if not r.dragging:
                         r.x = start_x + i * 50
                         r.y = start_y
                         r.rect = pygame.Rect(r.x, r.y, 40, 40)
-                        # Basit Rün Çizimi (Yuvarlak)
                         pygame.draw.circle(self.screen, (20,20,30), (r.x+20, r.y+20), 20)
                         pygame.draw.circle(self.screen, r.color, (r.x+20, r.y+20), 18)
                         font = pygame.font.SysFont("Arial", 20, bold=True)
                         txt = font.render(r.icon, True, (255,255,255))
                         self.screen.blit(txt, txt.get_rect(center=(r.x+20, r.y+20)))
+            
+            for b in self.blocks:
+                if b != self.held_block:
+                    b.draw(self.screen, 0, 0, 0.8, 255, theme['style'])
+            
+            # Layer 5: VFX/Particles (above grid and hand)
+            self.particle_system.draw(self.screen)
 
-            theme = self.get_current_theme()
-            self.grid.draw(self.screen, total_shake_x, total_shake_y, theme)
+            # Layer 6: Atmosphere overlay and ghost block preview
+            danger_level = 0.0
+            if self.active_boss_effect:
+                danger_level = 0.2 
+            self.particle_system.atmosphere.draw_overlay(self.screen, danger_level)
             
             if self.active_boss_effect != 'The Haze': 
                 if self.held_block and self.held_block.dragging:
-                    # Get mouse position directly
                     cur_x = self.mouse_x - self.held_block.offset_x
                     cur_y = self.mouse_y - self.held_block.offset_y
                     check_x = cur_x + (TILE_SIZE / 2); check_y = cur_y + (TILE_SIZE / 2)
                     gr, gc = self.get_grid_pos(check_x, check_y)
                     if gr is not None and gc is not None:
-                        target_px = self.grid_offset_x + gc * TILE_SIZE
-                        target_py = self.grid_offset_y + gr * TILE_SIZE
+                        target_px = GRID_OFFSET_X + gc * TILE_SIZE
+                        target_py = GRID_OFFSET_Y + gr * TILE_SIZE
                         orig = self.held_block.rect.topleft
                         self.held_block.rect.topleft = (target_px, target_py)
                         if self.grid.is_valid_position(self.held_block, gr, gc):
                             self.held_block.draw(self.screen, target_px, target_py, 1.0, 60, theme['style'])
                         self.held_block.rect.topleft = orig
             
-            for b in self.blocks:
-                if b != self.held_block: b.draw(self.screen, 0, 0, 0.8, 255, theme['style'])
+            # Layer 7: State-specific overlays
+            if self.state == STATE_SHOP:
+                self.ui.draw_shop(self.screen, self)
+
+            elif self.state == STATE_PAUSE: self.ui.draw_pause_overlay(self.screen)
+            elif self.state == STATE_GAME_OVER: self.ui.draw_game_over(self.screen, self.score)
             
-            # --- SÜRÜKLENEN RÜN ÇİZİMİ (Grid ve blokların ÜSTÜnde - Z-Index Fix) ---
-            if self.state == STATE_PLAYING and self.held_rune and self.held_rune.dragging:
+            # Tooltips
+            if self.state != STATE_SHOP:
+                self.ui.draw_final_tooltip_layer(self.screen, self)
+            
+            # Layer 8: Dragged rune (on top of overlays)
+            if self.state in [STATE_PLAYING, STATE_TRAINING] and self.held_rune and self.held_rune.dragging:
                 rx, ry = self.held_rune.x, self.held_rune.y
-                # Biraz büyük çiz (sürüklenirken)
                 pygame.draw.circle(self.screen, (20, 20, 30), (rx, ry), 24)
                 pygame.draw.circle(self.screen, self.held_rune.color, (rx, ry), 22, 3)
                 font = pygame.font.SysFont("Arial", 22, bold=True)
                 txt = font.render(self.held_rune.icon, True, self.held_rune.color)
                 self.screen.blit(txt, txt.get_rect(center=(rx, ry)))
             
-            danger_level = 0.0
-            if self.active_boss_effect: danger_level = 0.2 
-            self.particle_system.atmosphere.draw_overlay(self.screen, danger_level)
-            
-            self.particle_system.draw(self.screen)
-            self.ui.draw_hud_elements(self.screen, self)
-            
-            if self.state == STATE_SHOP:
-                self.ui.draw_shop(self.screen, self)
-                # NOT: Rünler artık sadece ui.draw_shop içinde çiziliyor (çift çizim kaldırıldı)
-
-            elif self.state == STATE_PAUSE: self.ui.draw_pause_overlay(self.screen)
-            elif self.state == STATE_GAME_OVER: self.ui.draw_game_over(self.screen, self.score)
-            
-            # --- TOOLTIP KATMANI (En son çizilir - Z-Index düzeltmesi) ---
-            # Shop ekranı kendi tooltip'ini çiziyor, diğer durumlar için bu katmanı kullan
-            if self.state != STATE_SHOP:
-                self.ui.draw_final_tooltip_layer(self.screen, self)
-            
-            # --- SÜRÜKLENEN BLOK ÇİZİMİ (En son çizilir - Tüm nesnelerin üstünde) ---
-            # Held block is drawn last so it appears on top of everything
+            # Layer 9: Dragged block (topmost)
             if self.held_block: 
                 self.held_block.draw(self.screen, 0, 0, 1.0, 255, theme['style'])
         

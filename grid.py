@@ -7,7 +7,7 @@ class Grid:
     def __init__(self):
         self.grid = [[None for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
         self.surface = pygame.Surface((GRID_WIDTH, GRID_HEIGHT))
-        self.rect = self.surface.get_rect(topleft=(0, 0))
+        self.rect = pygame.Rect(GRID_OFFSET_X, GRID_OFFSET_Y, GRID_WIDTH, GRID_HEIGHT)
         
         # Ekstra Veri Katmanları
         self.grid_tags = [['NONE' for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
@@ -18,10 +18,9 @@ class Grid:
         self.border_pulse = 0 
 
     def update_position(self, screen_width, screen_height):
-        center_x = (screen_width - GRID_WIDTH) // 2
-        center_y = (screen_height - GRID_HEIGHT) // 2 - 40 
-        self.rect.topleft = (center_x, center_y)
-        return center_x, center_y
+        # Position is controlled by settings; return current offsets
+        self.rect.topleft = (GRID_OFFSET_X, GRID_OFFSET_Y)
+        return GRID_OFFSET_X, GRID_OFFSET_Y
 
     def reset(self):
         self.grid = [[None for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
@@ -161,8 +160,10 @@ class Grid:
                 
         return rows_to_clear, cols_to_clear, total_color_bonus, match_count, rune_bonuses
 
-    def draw(self, screen, offset_x=0, offset_y=0, theme_data=None, highlight_rows=[], highlight_cols=[]):
+    def draw(self, screen, theme_data=None, highlight_rows=None, highlight_cols=None):
         if theme_data is None: theme_data = THEMES['NEON']
+        if highlight_rows is None: highlight_rows = []
+        if highlight_cols is None: highlight_cols = []
         bg_col = theme_data['grid_bg']
         style = theme_data['style']
         base_line_col = theme_data['line']
@@ -239,7 +240,7 @@ class Grid:
                             pygame.draw.circle(self.surface, (0,0,0,100), rect.center, 6)
                             pygame.draw.circle(self.surface, rune.color, rect.center, 4)
 
-        draw_rect = self.rect.move(offset_x, offset_y)
+        draw_rect = self.rect
         border_thickness = 3 + int(self.border_pulse)
         pygame.draw.rect(screen, ACCENT_COLOR, draw_rect.inflate(6 + self.border_pulse, 6 + self.border_pulse), border_thickness, border_radius=8)
         

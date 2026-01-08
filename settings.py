@@ -14,7 +14,7 @@ WINDOW_W = 850  # Same as VIRTUAL_W
 WINDOW_H = 480  # Same as VIRTUAL_H
 
 # --- SIDEBAR & LAYOUT ---
-SIDEBAR_WIDTH = 190
+SIDEBAR_WIDTH = 220
 PLAY_AREA_W = VIRTUAL_W - SIDEBAR_WIDTH
 PLAY_AREA_H = VIRTUAL_H
 
@@ -27,10 +27,21 @@ LOGO_FILES = ["1.jpg", "2.jpg", "3.jpg", "4.jpg", "5.jpg", "6.jpg", "7.jpg"]
 MAX_MENU_BLOCKS = 15
 
 # --- GRID ---
-TILE_SIZE = 30 
+# Calibrated cell size: 8 rows * 38 = 304px within 480px height
+CELL_SIZE = 38
+TILE_SIZE = CELL_SIZE
 GRID_SIZE = 8
 GRID_WIDTH = GRID_SIZE * TILE_SIZE
 GRID_HEIGHT = GRID_SIZE * TILE_SIZE
+
+# Center grid within the playable area (excluding sidebar)
+CENTER_OFFSET = (PLAY_AREA_W - GRID_WIDTH) // 2
+GRID_OFFSET_X = SIDEBAR_WIDTH + CENTER_OFFSET
+GRID_OFFSET_Y = 60
+
+# --- HAND LAYOUT ---
+# Draw the hand strictly below the grid with proper gap
+HAND_Y = GRID_OFFSET_Y + GRID_HEIGHT + 25
 
 # --- RENKLER ---
 BG_COLOR = (20, 15, 30)          

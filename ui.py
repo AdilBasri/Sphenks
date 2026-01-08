@@ -478,6 +478,20 @@ class UIManager:
         s.fill((10, 5, 15, 200)) 
         surface.blit(s, rect.topleft)
         pygame.draw.line(surface, ACCENT_COLOR, rect.topleft, rect.topright, 2)
+        
+        # Draw keyboard control hints
+        # NEW POSITION: Bottom left, above the MENU button in sidebar
+        hint_x = 25  # Aligned with menu button (20 + small offset)
+        menu_btn_y = VIRTUAL_H - 50  # Menu button Y position
+        hint_y = menu_btn_y - 50  # Start 50px above menu button
+        
+        # [R] Rotate
+        rotate_hint = self.font_small.render("[R] Rotate", True, (255, 200, 50))  # Gold color
+        surface.blit(rotate_hint, (hint_x, hint_y))
+        
+        # [E] Flip (stacked below)
+        flip_hint = self.font_small.render("[E] Flip", True, (255, 200, 50))  # Gold color
+        surface.blit(flip_hint, (hint_x, hint_y + 18))
 
     def render_wrapped_text(self, surface, text, font, color, x, y, max_width, line_spacing=15):
         words = text.split(' ')
@@ -625,61 +639,72 @@ class UIManager:
             title = self.title_font.render("SPHENKS", True, ACCENT_COLOR)
             surface.blit(title, title.get_rect(center=(cx, center_y - 120)))
 
-        # === FIXED-SIZE BUTTON PANEL (Bottom Control Center) ===
-        # Layout Constants
+        # === POLISHED BUTTON PANEL (Professional Menu Layout) ===
+        # Fixed Layout Constants
         PANEL_H = 120
         BTN_H = 60
-        BTN_MARGIN = 15
-        W_LARGE = 220   # PLAY
-        W_MED = 160     # TRAINING, COLLECTION
-        W_SMALL = 60    # SETTINGS, EXIT
+        BTN_MARGIN = 18
+        W_LARGE = 240    # PLAY - Primary action
+        W_MEDIUM = 180   # TRAINING, COLLECTION - Secondary actions
+        W_SMALL = 80     # SETTINGS, EXIT - Utility buttons
         
-        # Calculate panel area
+        # Panel positioning
         panel_top = VIRTUAL_H - PANEL_H
-        panel_center_y = panel_top + (PANEL_H // 2) - (BTN_H // 2)
+        button_top = panel_top + (PANEL_H // 2) - (BTN_H // 2)
         
         # Get mouse for hover detection
         mx, my = pygame.mouse.get_pos()
         
-        # Button definitions: (label, width, color_normal, color_hover, border_color_normal, border_color_hover, text_color)
+        # Button configuration: (label, width, color_norm, color_hover, border_norm, border_hover, text_color, font_size)
         buttons_config = [
-            ("EXIT", W_SMALL, (60, 25, 25), (90, 40, 40), (100, 50, 50), (200, 80, 80), (255, 200, 200)),
-            ("PLAY", W_LARGE, (0, 200, 160), ACCENT_COLOR, ACCENT_COLOR, (255, 255, 255), (20, 15, 30)),
-            ("TRAINING", W_MED, (50, 45, 60), (70, 65, 80), (100, 100, 100), (150, 150, 150), (255, 255, 255)),
-            ("COLLECTION", W_MED, (50, 45, 60), (70, 65, 80), (100, 100, 100), (150, 150, 150), (255, 255, 255)),
-            ("SETTINGS", W_SMALL, (50, 45, 60), (70, 65, 80), (100, 100, 100), (150, 150, 150), (255, 255, 255)),
+            ("EXIT", W_SMALL, (60, 25, 25), (90, 40, 40), (100, 50, 50), (200, 80, 80), (255, 200, 200), 14),
+            ("PLAY", W_LARGE, (0, 200, 160), ACCENT_COLOR, ACCENT_COLOR, (255, 255, 255), (20, 15, 30), 16),
+            ("TRAINING", W_MEDIUM, (50, 45, 60), (70, 65, 80), (100, 100, 100), (150, 150, 150), (255, 255, 255), 14),
+            ("COLLECTION", W_MEDIUM, (50, 45, 60), (70, 65, 80), (100, 100, 100), (150, 150, 150), (255, 255, 255), 14),
+            ("SETTINGS", W_SMALL, (50, 45, 60), (70, 65, 80), (100, 100, 100), (150, 150, 150), (255, 255, 255), 14),
         ]
         
-        # Calculate total width and starting X position
+        # Calculate total width for proper centering
         total_width = sum(btn[1] for btn in buttons_config) + (len(buttons_config) - 1) * BTN_MARGIN
-        start_x = (VIRTUAL_W - total_width) // 2
+        panel_start_x = (VIRTUAL_W - total_width) // 2
         
         self.menu_buttons = []
-        current_x = start_x
+        current_x = panel_start_x
         
-        for label, width, color_norm, color_hover, border_norm, border_hover, text_color in buttons_config:
-            # Create button rect with fixed height
-            btn_rect = pygame.Rect(current_x, panel_center_y, width, BTN_H)
+        for label, width, color_norm, color_hover, border_norm, border_hover, text_color, font_size in buttons_config:
+            # Create button rectangle
+            btn_rect = pygame.Rect(current_x, button_top, width, BTN_H)
             
-            # Check hover
+            # Detect hover state
             is_hovered = btn_rect.collidepoint(mx, my)
-            btn_color = color_hover if is_hovered else color_norm
-            border_color = border_hover if is_hovered else border_norm
+            btn_fill_color = color_hover if is_hovered else color_norm
+            btn_border_color = border_hover if is_hovered else border_norm
             
-            # Draw button
-            pygame.draw.rect(surface, btn_color, btn_rect, border_radius=12)
-            pygame.draw.rect(surface, border_color, btn_rect, 3, border_radius=12)
+            # Draw button fill (rounded)
+            pygame.draw.rect(surface, btn_fill_color, btn_rect, border_radius=12)
             
-            # Render text with appropriate font size
-            if label in ["EXIT", "SETTINGS"]:
-                text = self.font_bold.render(label, True, text_color)
-            else:
-                text = self.font_bold.render(label, True, text_color)
+            # Draw main border (3px)
+            pygame.draw.rect(surface, btn_border_color, btn_rect, 3, border_radius=12)
             
-            # Center text in button
-            surface.blit(text, text.get_rect(center=btn_rect.center))
+            # Draw darker outline for definition (1px, darker shade)
+            darker_border = tuple(max(0, c - 40) for c in btn_border_color)
+            outline_rect = btn_rect.inflate(-2, -2)  # Shrink slightly for inner outline
+            pygame.draw.rect(surface, darker_border, outline_rect, 1, border_radius=10)
             
-            # Store for click detection
+            # Render text with proper font scaling
+            text_font = pygame.font.SysFont(FONT_NAME, font_size, bold=True)
+            text_surface = text_font.render(label, True, text_color)
+            
+            # Check if text fits - if not, use smaller font
+            if text_surface.get_width() > width - 16:  # 8px padding on each side
+                text_font = pygame.font.SysFont(FONT_NAME, max(10, font_size - 2), bold=True)
+                text_surface = text_font.render(label, True, text_color)
+            
+            # Center text both horizontally and vertically in button
+            text_rect = text_surface.get_rect(center=btn_rect.center)
+            surface.blit(text_surface, text_rect)
+            
+            # Store button for click detection
             self.menu_buttons.append((btn_rect, label))
             
             # Move to next button position
@@ -781,73 +806,69 @@ class UIManager:
         surface.blit(nt, nt.get_rect(center=no_btn.center))
         self.pause_buttons = {'YES': yes_btn, 'NO': no_btn}
 
-    def draw_training_overlay(self, surface, step):
-        """Interactive tutorial overlay with highlighted areas and instructions"""
+    def draw_training_overlay(self, surface, game, step):
+        """Interactive tutorial overlay with 6-step progression and guided actions"""
+        if not getattr(game, 'tutorial_active', True):
+            return
         
-        # Create semi-transparent dark overlay
-        overlay = pygame.Surface((VIRTUAL_W, VIRTUAL_H), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 180))
+        # Right-side panel geometry
+        panel_w = 230
+        panel_h = VIRTUAL_H - 40
+        panel_x = VIRTUAL_W - panel_w - 10
+        panel_y = 20
         
-        # Define tutorial content for each step
+        # Define tutorial content for all 6 steps
         tutorial_data = {
             0: {
                 'title': "WELCOME TO SPHENKS!",
-                'text': "Drag a block from your hand to the grid to start.",
+                'text': "Drag a block from your hand to the grid to start.\nPlace it on an empty space to fill your grid.",
                 'highlight': pygame.Rect(SIDEBAR_WIDTH, VIRTUAL_H - HAND_BG_HEIGHT, PLAY_AREA_W, HAND_BG_HEIGHT),
-                'arrow_to': 'hand'
+                'show_continue': False,
+                'condition_text': None
             },
             1: {
-                'title': "SCORING",
-                'text': "Clear lines horizontally or vertically to score points!\nMatch colors for bonus multipliers.\nReach the target score to win each round.",
-                'highlight': pygame.Rect(SIDEBAR_WIDTH + 50, 50, GRID_WIDTH + 50, GRID_HEIGHT + 50),
-                'arrow_to': 'grid'
+                'title': "MASTER CONTROLS",
+                'text': "You can transform your blocks!\n\n[R] to ROTATE the block\n[E] to FLIP the block horizontally\n\nTry pressing R or E while holding a block!",
+                'highlight': pygame.Rect(SIDEBAR_WIDTH, VIRTUAL_H - HAND_BG_HEIGHT, PLAY_AREA_W, HAND_BG_HEIGHT),
+                'show_continue': False,
+                'condition_text': "Press [R] or [E] to continue"
             },
             2: {
-                'title': "TOTEMS & RUNES",
-                'text': "Collect Totems (permanent bonuses) from the shop.\nUse Runes (consumables) for powerful one-time effects.\nBuild your strategy to climb higher Antes!",
-                'highlight': pygame.Rect(10, 10, SIDEBAR_WIDTH - 20, 250),
-                'arrow_to': 'sidebar'
+                'title': "SCORING & STRATEGY",
+                'text': "Clear lines horizontally or vertically to earn points.\nMatch block colors for bonus multipliers!\nReach your target score to advance to the next blind.",
+                'highlight': pygame.Rect(SIDEBAR_WIDTH + 50, 50, GRID_WIDTH + 50, GRID_HEIGHT + 50),
+                'show_continue': True,
+                'condition_text': None
             },
             3: {
+                'title': "MEET YOUR ARSENAL",
+                'text': "You now have a JOKER (permanent passive bonus) and a RUNE (one-time consumable effect).\n\nJokers power up your plays.\nRunes trigger when you apply them to block cells.",
+                'highlight': pygame.Rect(SIDEBAR_WIDTH, 50, SIDEBAR_WIDTH - 10, 120),
+                'show_continue': True,
+                'condition_text': None
+            },
+            4: {
+                'title': "USE YOUR RUNE",
+                'text': "Drag the highlighted RUNE to a cell on one of your blocks.\n\nThis demonstrates how consumables enhance your blocks.",
+                'highlight': None,  # Will be drawn dynamically below
+                'show_continue': False,
+                'condition_text': "Drag the rune to a block cell",
+                'draw_rune_highlight': True  # Special flag for rune highlighting
+            },
+            5: {
                 'title': "YOU'RE READY!",
-                'text': "Master the grid, collect powerful items,\nand conquer the Pharaoh's debt.\n\nGood luck, puzzle master!",
+                'text': "You now understand the core mechanics:\n\n• Drag blocks to the grid\n• Rotate and flip with [R] and [E]\n• Use Runes to enhance your strategy\n• Build up your deck with Jokers\n\nGood luck, puzzle master!",
                 'highlight': None,
-                'arrow_to': None
+                'show_continue': True,
+                'condition_text': None
             }
         }
         
         current = tutorial_data.get(step, tutorial_data[0])
         
-        # Draw overlay with cutout for highlighted area
+        # Draw highlight around important areas (if specified)
         if current['highlight']:
-            # Create a mask with the highlighted area cut out
-            # Draw dark overlay everywhere except the highlighted region
             highlight_rect = current['highlight']
-            
-            # Draw overlay in 4 sections around the highlight
-            # Top section
-            top_section = pygame.Surface((VIRTUAL_W, highlight_rect.top), pygame.SRCALPHA)
-            top_section.fill((0, 0, 0, 180))
-            surface.blit(top_section, (0, 0))
-            
-            # Bottom section
-            bottom_h = VIRTUAL_H - highlight_rect.bottom
-            if bottom_h > 0:
-                bottom_section = pygame.Surface((VIRTUAL_W, bottom_h), pygame.SRCALPHA)
-                bottom_section.fill((0, 0, 0, 180))
-                surface.blit(bottom_section, (0, highlight_rect.bottom))
-            
-            # Left section
-            left_section = pygame.Surface((highlight_rect.left, highlight_rect.height), pygame.SRCALPHA)
-            left_section.fill((0, 0, 0, 180))
-            surface.blit(left_section, (0, highlight_rect.top))
-            
-            # Right section
-            right_w = VIRTUAL_W - highlight_rect.right
-            if right_w > 0:
-                right_section = pygame.Surface((right_w, highlight_rect.height), pygame.SRCALPHA)
-                right_section.fill((0, 0, 0, 180))
-                surface.blit(right_section, (highlight_rect.right, highlight_rect.top))
             
             # Draw bright border around highlighted area
             pygame.draw.rect(surface, ACCENT_COLOR, highlight_rect, 4, border_radius=10)
@@ -860,45 +881,97 @@ class UIManager:
             for i in range(3):
                 glow_rect = highlight_rect.inflate(i * 8, i * 8)
                 pygame.draw.rect(surface, glow_color, glow_rect, 2, border_radius=12)
-        else:
-            # No highlight - full overlay
-            surface.blit(overlay, (0, 0))
         
-        # Draw instruction box
-        box_w, box_h = 500, 220
-        box_x = (VIRTUAL_W - box_w) // 2
-        box_y = VIRTUAL_H - box_h - 40
+        # Draw right-side panel background
+        panel_rect = pygame.Rect(panel_x, panel_y, panel_w, panel_h)
         
-        # If highlighting bottom area, move box to top
-        if current['highlight'] and current['highlight'].bottom > VIRTUAL_H - 150:
-            box_y = 40
+        # Semi-transparent dark background for panel only
+        panel_surface = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+        panel_surface.fill((15, 10, 25, 220))
+        surface.blit(panel_surface, (panel_x, panel_y))
         
-        box_rect = pygame.Rect(box_x, box_y, box_w, box_h)
+        # Panel border
+        pygame.draw.rect(surface, ACCENT_COLOR, panel_rect, 3, border_radius=12)
         
-        # Draw box background
-        pygame.draw.rect(surface, (20, 15, 30), box_rect, border_radius=15)
-        pygame.draw.rect(surface, ACCENT_COLOR, box_rect, 3, border_radius=15)
+        # Title at top of panel
+        title = self.font_bold.render("TUTORIAL", True, ACCENT_COLOR)
+        title_rect = title.get_rect(centerx=panel_rect.centerx, top=panel_rect.top + 15)
+        surface.blit(title, title_rect)
         
-        # Title
-        title = self.font_bold.render(current['title'], True, ACCENT_COLOR)
-        surface.blit(title, title.get_rect(center=(box_rect.centerx, box_rect.top + 30)))
+        # Step indicator
+        step_text = self.font_small.render(f"Step {step + 1}/6", True, (150, 150, 150))
+        step_rect = step_text.get_rect(centerx=panel_rect.centerx, top=title_rect.bottom + 5)
+        surface.blit(step_text, step_rect)
         
-        # Instruction text (multi-line support)
-        lines = current['text'].split('\n')
-        line_y = box_rect.top + 70
-        for line in lines:
-            text = self.font_reg.render(line, True, (255, 255, 255))
-            surface.blit(text, text.get_rect(center=(box_rect.centerx, line_y)))
-            line_y += 25
+        # Separator line
+        line_y = step_rect.bottom + 10
+        pygame.draw.line(surface, ACCENT_COLOR, (panel_x + 15, line_y), (panel_x + panel_w - 15, line_y), 2)
         
-        # "Click to Continue" indicator (steps 1-3)
-        if step > 0:
-            import math
-            import time
+        # Content area
+        content_y = line_y + 15
+        content_x = panel_x + 10
+        content_w = panel_w - 20
+        
+        # Step title
+        step_title_lines = self._wrap_text(current['title'], content_w - 10, self.font_bold)
+        for line in step_title_lines:
+            line_surf = self.font_bold.render(line, True, (255, 200, 100))
+            surface.blit(line_surf, (content_x + 5, content_y))
+            content_y += 20
+        
+        content_y += 10
+        
+        # Instruction text (wrapped)
+        instruction_lines = current['text'].split('\n')
+        for paragraph in instruction_lines:
+            if paragraph.strip():
+                wrapped_lines = self._wrap_text(paragraph.strip(), content_w - 10, self.font_small)
+                for line in wrapped_lines:
+                    line_surf = self.font_small.render(line, True, (220, 220, 220))
+                    surface.blit(line_surf, (content_x + 5, content_y))
+                    content_y += 18
+            else:
+                content_y += 10  # Blank line spacing
+        
+        # Condition text or continue indicator at bottom
+        import math
+        import time
+        if current['condition_text']:
+            pulse = abs(math.sin(time.time() * 4)) * 0.3 + 0.7
+            condition_color = (int(255 * pulse), int(200 * pulse), int(50 * pulse))
+            condition_lines = self._wrap_text(current['condition_text'], content_w - 10, self.font_small)
+            cond_y = panel_rect.bottom - 40 - (len(condition_lines) * 18)
+            for line in condition_lines:
+                condition_text = self.font_small.render(line, True, condition_color)
+                surface.blit(condition_text, (content_x + 5, cond_y))
+                cond_y += 18
+        elif current['show_continue']:
             pulse = abs(math.sin(time.time() * 4)) * 0.3 + 0.7
             continue_color = (int(255 * pulse), int(255 * pulse), int(100 * pulse))
-            continue_text = self.font_small.render(">>> CLICK TO CONTINUE <<<", True, continue_color)
-            surface.blit(continue_text, continue_text.get_rect(center=(box_rect.centerx, box_rect.bottom - 25)))
+            continue_text = self.font_small.render("CLICK TO CONTINUE", True, continue_color)
+            surface.blit(continue_text, (content_x + 5, panel_rect.bottom - 30))
+        
+        # Special: Draw flashing highlight around rune in step 4
+        if current.get('draw_rune_highlight', False):
+            import math
+            import time
+            # Calculate rune position (same as in game.py drawing code)
+            start_x = SIDEBAR_WIDTH + 20
+            start_y = 60
+            rune_size = 40
+            
+            # Draw bright flashing rectangle around first rune position
+            pulse = abs(math.sin(time.time() * 5)) * 0.5 + 0.5
+            highlight_color = (int(255 * pulse), int(200 * pulse), int(50 * pulse))
+            rune_rect = pygame.Rect(start_x - 5, start_y - 5, rune_size + 10, rune_size + 10)
+            pygame.draw.rect(surface, highlight_color, rune_rect, 4, border_radius=25)
+            
+            # Outer glow effect
+            for i in range(3):
+                glow_rect = rune_rect.inflate(i * 6, i * 6)
+                glow_alpha = int(80 * pulse / (i + 1))
+                glow_color = (*highlight_color, glow_alpha)
+                pygame.draw.rect(surface, glow_color, glow_rect, 2, border_radius=25)
 
     def draw_shop(self, surface, game):
         """Market ekranı - Balatro tarzı kart görünümü"""
@@ -1556,6 +1629,28 @@ class UIManager:
         # Default to first resolution if no match
         return 0
 
+    def _wrap_text(self, text, max_width, font):
+        """Wrap text to fit within max_width pixels"""
+        words = text.split(' ')
+        lines = []
+        current_line = []
+        
+        for word in words:
+            test_line = ' '.join(current_line + [word])
+            test_surf = font.render(test_line, True, (255, 255, 255))
+            
+            if test_surf.get_width() <= max_width:
+                current_line.append(word)
+            else:
+                if current_line:
+                    lines.append(' '.join(current_line))
+                current_line = [word]
+        
+        if current_line:
+            lines.append(' '.join(current_line))
+        
+        return lines if lines else [text]
+    
     def check_rune_hover(self, game):
         """Oyun sırasında rünler üzerine hover kontrolü - tooltip verisi döndürür"""
         mx, my = pygame.mouse.get_pos()
