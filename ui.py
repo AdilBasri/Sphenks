@@ -216,12 +216,32 @@ class UIManager:
         # YENİ: Title ve Menu Block
         self.load_title_assets()
         self.menu_blocks = [MenuBlock(random.randint(0, VIRTUAL_W), random.randint(0, VIRTUAL_H)) for _ in range(15)]
+        
+        # Menu Background Randomization
+        self.menu_bg_image = None
+        try:
+            base_path = os.path.dirname(os.path.abspath(__file__))
+            desert_path = os.path.join(base_path, "assets", "desert.png")
+            room_path = os.path.join(base_path, "assets", "room.png")
+            
+            desert_img = pygame.image.load(desert_path).convert()
+            room_img = pygame.image.load(room_path).convert()
+            
+            # Scale both to screen size
+            desert_img = pygame.transform.scale(desert_img, (VIRTUAL_W, VIRTUAL_H))
+            room_img = pygame.transform.scale(room_img, (VIRTUAL_W, VIRTUAL_H))
+            
+            # Randomly choose one (50% chance each)
+            self.menu_bg_image = random.choice([desert_img, room_img])
+        except Exception as e:
+            # Fallback: If images are missing, continue without background
+            self.menu_bg_image = None
 
     def load_title_assets(self):
         """1.png - 7.png arası harfleri yükler, boyutlandırır ve TitleLetter objelerine dönüştürür"""
         self.title_letters = []
         base_path = os.path.dirname(os.path.abspath(__file__))
-        target_height = 80
+        target_height = 120
         
         loaded_imgs = []
         
@@ -248,7 +268,7 @@ class UIManager:
         
         total_w = sum(img.get_width() for img in loaded_imgs) + (len(loaded_imgs) - 1) * spacing
         start_x = (VIRTUAL_W - total_w) // 2
-        y_pos = (VIRTUAL_H // 2) - 100
+        y_pos = (VIRTUAL_H // 2) - 60
         
         current_x = start_x
         
@@ -410,14 +430,16 @@ class UIManager:
         pygame.draw.line(surface, PANEL_BORDER, (SIDEBAR_WIDTH, 0), (SIDEBAR_WIDTH, VIRTUAL_H), 4)
         cx = SIDEBAR_WIDTH // 2; y_cursor = 30
         
-        # Show TRAINING mode indicator instead of ANTE when in training state
+        # Show TRAINING mode indicator instead of LAYER when in training state
         if game.state == STATE_TRAINING:
             ante_txt = self.font_bold.render("TRAINING", True, (0, 255, 200))  # Cyan color
+        elif game.endless_mode:
+            ante_txt = self.font_bold.render("∞", True, (255, 200, 50))  # Infinity symbol
         else:
-            ante_txt = self.font_bold.render(f"ANTE {game.ante} / 8", True, (200, 200, 200))
+            ante_txt = self.font_bold.render(f"LAYER {game.ante} / 8", True, (200, 200, 200))
         
         surface.blit(ante_txt, ante_txt.get_rect(center=(cx, y_cursor))); y_cursor += 30
-        round_name = ["Small Blind", "Big Blind", "Boss Blind"][game.round - 1]
+        round_name = ["Small Quota", "Big Quota", "Boss Tribute"][game.round - 1]
         round_col = TOTAL_COLOR
         if game.round == 3 and game.active_boss_effect:
             boss_key = game.active_boss_effect
@@ -438,14 +460,14 @@ class UIManager:
         chips_val = game.scoring_data['base'] if game.state == STATE_SCORING else 0
         chips_txt = self.font_score.render(str(chips_val), True, CHIPS_COLOR)
         surface.blit(chips_txt, chips_txt.get_rect(midleft=(score_box.x + 15, box_y)))
-        lbl_chips = self.font_small.render("Chips", True, CHIPS_COLOR)
+        lbl_chips = self.font_small.render("Labor", True, CHIPS_COLOR)
         surface.blit(lbl_chips, lbl_chips.get_rect(midleft=(score_box.x + 15, box_y + 15)))
         x_txt = self.font_bold.render("X", True, (255,255,255))
         surface.blit(x_txt, x_txt.get_rect(center=(box_cx, box_y + 10)))
         mult_val = game.scoring_data['mult'] if game.state == STATE_SCORING else 0.0
         mult_txt = self.font_score.render(f"{mult_val:.1f}", True, MULT_COLOR)
         surface.blit(mult_txt, mult_txt.get_rect(midright=(score_box.right - 15, box_y)))
-        lbl_mult = self.font_small.render("Mult", True, MULT_COLOR)
+        lbl_mult = self.font_small.render("Favor", True, MULT_COLOR)
         surface.blit(lbl_mult, lbl_mult.get_rect(midright=(score_box.right - 15, box_y + 15)))
         box_y += 50
         total_lbl = self.font_reg.render("Total", True, (200, 200, 200))
@@ -457,7 +479,7 @@ class UIManager:
         total_txt = self.font_big.render(str(hand_total), True, TOTAL_COLOR)
         surface.blit(total_txt, total_txt.get_rect(center=(box_cx + shake, box_y + shake)))
         y_cursor += score_box_h + 20
-        lbl_round_score = self.font_reg.render("Round Score", True, (150, 150, 150))
+        lbl_round_score = self.font_reg.render("Shift Score", True, (150, 150, 150))
         surface.blit(lbl_round_score, lbl_round_score.get_rect(center=(cx, y_cursor))); y_cursor += 20
         sc_col = (255, 255, 255)
         if game.score >= game.level_target: sc_col = (100, 255, 100)
@@ -622,6 +644,9 @@ class UIManager:
                 }
 
     def draw_menu(self, surface, high_score):
+        # Draw random menu background if available
+        if self.menu_bg_image:
+            surface.blit(self.menu_bg_image, (0, 0))
         # Background already drawn via draw_bg (ra.png and eyes)
         
         # Floating decorative blocks (behind title but in front of BG)
@@ -1270,6 +1295,60 @@ class UIManager:
             
             btn_text = self.font_bold.render("CONTINUE", True, (255, 255, 255))
             surface.blit(btn_text, btn_text.get_rect(center=btn_rect.center))
+
+    def draw_demo_end(self, surface, game):
+        """Demo ending screen - Thank you for playing message with endless mode option"""
+        # Dark overlay
+        overlay = pygame.Surface((VIRTUAL_W, VIRTUAL_H), pygame.SRCALPHA)
+        overlay.fill((5, 5, 10, 240))
+        surface.blit(overlay, (0, 0))
+        
+        cx = VIRTUAL_W // 2
+        cy = VIRTUAL_H // 2
+        
+        # Title
+        title = self.title_font.render("DEMO COMPLETED", True, ACCENT_COLOR)
+        surface.blit(title, title.get_rect(center=(cx, cy - 140)))
+        
+        # Main message - Line 1
+        msg1 = self.font_big.render("You have survived 8 Layers...", True, (255, 255, 255))
+        surface.blit(msg1, msg1.get_rect(center=(cx, cy - 60)))
+        
+        # Main message - Line 2
+        msg2 = self.font_bold.render("for now.", True, (255, 150, 150))
+        surface.blit(msg2, msg2.get_rect(center=(cx, cy - 20)))
+        
+        # Subtitle
+        subtitle1 = self.font_reg.render("The Pharaoh's debt is not fully paid.", True, (200, 200, 200))
+        surface.blit(subtitle1, subtitle1.get_rect(center=(cx, cy + 30)))
+        
+        subtitle2 = self.font_reg.render("Continue in ENDLESS MODE to seek the True Ending.", True, (200, 200, 200))
+        surface.blit(subtitle2, subtitle2.get_rect(center=(cx, cy + 55)))
+        
+        # Endless mode button
+        btn_w, btn_h = 300, 60
+        btn_x = cx - (btn_w // 2)
+        btn_y = cy + 100
+        
+        btn_rect = pygame.Rect(btn_x, btn_y, btn_w, btn_h)
+        self.demo_end_button = btn_rect  # Store for event handling
+        
+        mx, my = pygame.mouse.get_pos()
+        hover = btn_rect.collidepoint(mx, my)
+        
+        # Glowing effect for button
+        btn_color = (100, 50, 150) if hover else (60, 30, 100)
+        border_color = (255, 200, 50) if hover else ACCENT_COLOR
+        
+        pygame.draw.rect(surface, btn_color, btn_rect, border_radius=12)
+        pygame.draw.rect(surface, border_color, btn_rect, 3, border_radius=12)
+        
+        btn_text = self.font_big.render("ENTER ETERNITY", True, (255, 255, 255))
+        surface.blit(btn_text, btn_text.get_rect(center=btn_rect.center))
+        
+        # Infinity symbol hint below button
+        hint = self.font_small.render("(Endless Mode: ∞)", True, (150, 150, 150))
+        surface.blit(hint, hint.get_rect(center=(cx, btn_y + btn_h + 20)))
 
     def draw_collection(self, surface, game):
         """Collection screen showing unlocked items with scrolling support"""

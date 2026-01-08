@@ -117,6 +117,7 @@ STATE_SETTINGS = 'state_settings'
 STATE_LEVEL_COMPLETE = 'level_complete'
 STATE_GAME_OVER = 'game_over'
 STATE_PAUSE = 'pause'
+STATE_DEMO_END = 'demo_end'
 
 # --- SETTINGS ---
 RESOLUTIONS = [

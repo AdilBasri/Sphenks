@@ -5,7 +5,7 @@ import random
 import math
 import os
 from settings import *
-from settings import USE_FULLSCREEN, WINDOW_W, WINDOW_H, STATE_DEBT, PHARAOH_QUOTES, COLLECTIBLES, STATE_COLLECTION, STATE_SETTINGS, STATE_TRAINING, RESOLUTIONS, STATE_INTRO
+from settings import USE_FULLSCREEN, WINDOW_W, WINDOW_H, STATE_DEBT, PHARAOH_QUOTES, COLLECTIBLES, STATE_COLLECTION, STATE_SETTINGS, STATE_TRAINING, RESOLUTIONS, STATE_INTRO, STATE_DEMO_END
 from grid import Grid
 import intro
 from block import Block
@@ -45,6 +45,7 @@ class Game:
         self.state = STATE_INTRO
         self.ante = 1
         self.round = 1
+        self.endless_mode = False
         self.force_omega_shop = False
         self.max_consumables = 5
         self.credits = 0
@@ -242,8 +243,13 @@ class Game:
                     if money > 0:
                         self.credits += money
                         self.particle_system.create_text(self.w//2, self.h//2, desc, (100, 255, 100))
-            self.state = STATE_LEVEL_COMPLETE
-            self.generate_shop()
+            
+            # Check for Demo End (Ante 8 Boss completion)
+            if self.ante == 8 and self.round == 3 and not self.endless_mode:
+                self.state = STATE_DEMO_END
+            else:
+                self.state = STATE_LEVEL_COMPLETE
+                self.generate_shop()
         else:
             self.audio.play('gameover')
             self.state = STATE_GAME_OVER
@@ -306,6 +312,15 @@ class Game:
                 self.force_omega_shop = True
                 
         self.state = STATE_ROUND_SELECT
+    
+    def continue_to_endless(self):
+        """Called when player enters endless mode from demo end screen"""
+        self.endless_mode = True
+        self.ante += 1  # Now Ante 9, but will show as ∞
+        self.round = 1
+        self.audio.play('select')
+        self.state = STATE_SHOP
+        self.generate_shop()
     
     def _check_collectible_unlocks(self):
         """Check if any collectibles were unlocked by the recent debt payment"""
@@ -891,6 +906,15 @@ class Game:
                             self.state = STATE_ROUND_SELECT
                             self.input_cooldown = 15  # Prevent ghost click on round select
             
+            elif self.state == STATE_DEMO_END:
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    # Check if endless mode button was clicked
+                    if hasattr(self.ui, 'demo_end_button'):
+                        if self.ui.demo_end_button.collidepoint(mx, my):
+                            self.audio.play('select')
+                            self.continue_to_endless()
+                            self.input_cooldown = 15
+            
             elif self.state == STATE_COLLECTION:
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     # Check if back button was clicked
@@ -1170,6 +1194,8 @@ class Game:
             pass
         elif self.state == STATE_DEBT:
             self.ui.draw_debt_screen(self.screen, self)
+        elif self.state == STATE_DEMO_END:
+            self.ui.draw_demo_end(self.screen, self)
         elif self.state == STATE_COLLECTION:
             self.ui.draw_collection(self.screen, self)
         elif self.state == STATE_SETTINGS:
