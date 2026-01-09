@@ -1,6 +1,7 @@
 # save_data.py
 import json
 import os
+import copy
 
 class SaveManager:
     """Manages save/load operations for player progression data."""
@@ -106,3 +107,21 @@ class SaveManager:
         if key in self.data['settings']:
             self.data['settings'][key] = value
             self.save_data()
+
+    def reset_progress(self):
+        """
+        Reset gameplay progress while preserving settings AND High Score.
+        """
+        # 1. Mevcut ayarları ve En İyi Skoru yedekle
+        settings_backup = copy.deepcopy(self.data.get('settings', {}))
+        high_score_backup = self.data.get('high_score', 0)
+        
+        # 2. Verileri varsayılana döndür
+        self.data = copy.deepcopy(self._get_default_data())
+        
+        # 3. Yedekleri geri yükle
+        self.data['settings'] = settings_backup
+        self.data['high_score'] = high_score_backup
+        
+        # 4. Kaydet
+        self.save_data()

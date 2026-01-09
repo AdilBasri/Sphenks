@@ -44,6 +44,8 @@ class Game:
         self.newly_unlocked_items = []  # Items unlocked in this debt screen
         # Global input guard to prevent ghost clicks after state changes
         self.input_cooldown = 0
+        # Reset progress confirmation flag
+        self.show_reset_confirm = False
 
         # Core game state defaults
         self.state = STATE_INTRO
@@ -126,6 +128,28 @@ class Game:
         """Return localized text for current language, fallback to key."""
         lang_pack = LANGUAGES.get(self.current_language, LANGUAGES.get(DEFAULT_LANGUAGE, {}))
         return lang_pack.get("text", {}).get(key, key)
+
+    def get_item_info(self, item_key):
+        """
+        Returns the localized name and description for an item.
+        Usage: info = game.get_item_info('sniper') -> {'name': 'SNIPER', 'desc': '...'}
+        """
+        # Get current language pack
+        lang_pack = LANGUAGES.get(self.current_language, LANGUAGES.get(DEFAULT_LANGUAGE, {}))
+        items_dict = lang_pack.get("text", {}).get("ITEMS", {})
+        
+        # If key exists, return it
+        if item_key in items_dict:
+            return items_dict[item_key]
+        
+        # Fallback to English
+        en_pack = LANGUAGES.get("EN", {})
+        en_items = en_pack.get("text", {}).get("ITEMS", {})
+        if item_key in en_items:
+            return en_items[item_key]
+        
+        # Default fallback
+        return {"name": item_key.upper(), "desc": "Unknown item"}
 
     def set_language(self, lang_code, play_sound=True):
         """Switch active language, update fonts, and optionally play select sound."""
@@ -632,29 +656,58 @@ class Game:
                         self.audio.play('select')
 
             if self.state == STATE_MENU:
-                # Handle menu button clicks on mouse down for snappy response
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    if hasattr(self.ui, 'menu_buttons'):
-                        for rect, text in self.ui.menu_buttons:
-                            if rect.collidepoint(mx, my) and self.input_cooldown == 0:
-                                if text == "PLAY": 
-                                    self.start_new_game()
-                                elif text == "SETTINGS":
-                                    self.audio.play('select')
-                                    # Clean temp settings when entering
-                                    if hasattr(self, 'temp_settings'):
-                                        delattr(self, 'temp_settings')
-                                    self.state = STATE_SETTINGS
-                                elif text == "COLLECTION":
-                                    self.audio.play('select')
-                                    self.state = STATE_COLLECTION
-                                elif text == "TRAINING":
-                                    self.audio.play('select')
-                                    self.state = STATE_TRAINING
-                                    self.input_cooldown = 15  # Prevent accidental clicks during transition
-                                    self.init_tutorial_mode()  # Initialize practice session (no save data affected)
-                                elif text == "EXIT": 
-                                    sys.exit()
+                # Handle reset confirmation first (if active)
+                if self.show_reset_confirm:
+                    if event.type == pygame.MOUSEBUTTONDOWN:
+                        if hasattr(self.ui, 'reset_confirm_buttons'):
+                            yes_btn = self.ui.reset_confirm_buttons['YES']
+                            no_btn = self.ui.reset_confirm_buttons['NO']
+                            if yes_btn.collidepoint(mx, my) and self.input_cooldown == 0:
+                                # Confirm reset
+                                self.save_manager.reset_progress()
+                                # Reload save data and update UI
+                                self.save_manager.data = self.save_manager._load_or_create()
+                                self.high_score = self.save_manager.data.get('high_score', 0)
+                                self.show_reset_confirm = False
+                                self.input_cooldown = 15
+                                self.audio.play('break')
+                            elif no_btn.collidepoint(mx, my) and self.input_cooldown == 0:
+                                # Cancel reset
+                                self.show_reset_confirm = False
+                                self.input_cooldown = 10
+                                self.audio.play('select')
+                else:
+                    # Normal menu handling
+                    if event.type == pygame.MOUSEBUTTONDOWN:
+                        # Check reset button first
+                        if hasattr(self.ui, 'reset_btn_rect'):
+                            if self.ui.reset_btn_rect.collidepoint(mx, my) and self.input_cooldown == 0:
+                                self.show_reset_confirm = True
+                                self.input_cooldown = 10
+                                self.audio.play('select')
+                        
+                        # Then check menu buttons
+                        if hasattr(self.ui, 'menu_buttons'):
+                            for rect, text in self.ui.menu_buttons:
+                                if rect.collidepoint(mx, my) and self.input_cooldown == 0:
+                                    if text == "PLAY": 
+                                        self.start_new_game()
+                                    elif text == "SETTINGS":
+                                        self.audio.play('select')
+                                        # Clean temp settings when entering
+                                        if hasattr(self, 'temp_settings'):
+                                            delattr(self, 'temp_settings')
+                                        self.state = STATE_SETTINGS
+                                    elif text == "COLLECTION":
+                                        self.audio.play('select')
+                                        self.state = STATE_COLLECTION
+                                    elif text == "TRAINING":
+                                        self.audio.play('select')
+                                        self.state = STATE_TRAINING
+                                        self.input_cooldown = 15  # Prevent accidental clicks during transition
+                                        self.init_tutorial_mode()  # Initialize practice session (no save data affected)
+                                    elif text == "EXIT": 
+                                        sys.exit()
 
             elif self.state == STATE_ROUND_SELECT:
                 if event.type == pygame.MOUSEBUTTONDOWN:
@@ -1244,6 +1297,9 @@ class Game:
         
         if self.state == STATE_MENU:
             self.ui.draw_menu(self.screen, self.high_score)
+            # Draw reset confirmation overlay if active
+            if self.show_reset_confirm:
+                self.ui.draw_reset_confirm_overlay(self.screen)
         elif self.state == STATE_TRAINING:
             # Draw training mode (game board + tutorial overlay)
             boss_shake_x, boss_shake_y = self.particle_system.atmosphere.get_shake_offset()

@@ -264,6 +264,25 @@ class UIManager:
     def t(self, key):
         return self.game.get_text(key)
 
+    def wrap_text(self, text, font, max_width):
+        """Splits text into lines that fit within max_width."""
+        words = text.split(' ')
+        lines = []
+        current_line = []
+        
+        for word in words:
+            test_line = ' '.join(current_line + [word])
+            w, h = font.size(test_line)
+            if w <= max_width:
+                current_line.append(word)
+            else:
+                if current_line:
+                    lines.append(' '.join(current_line))
+                current_line = [word]
+        if current_line:
+            lines.append(' '.join(current_line))
+        return lines
+
     def load_title_assets(self):
         """1.png - 7.png arası harfleri yükler, boyutlandırır ve TitleLetter objelerine dönüştürür"""
         self.title_letters = []
@@ -808,9 +827,25 @@ class UIManager:
             # Move to next button position
             current_x += width + BTN_MARGIN
         
-        # High Score Display (top-right corner, subtle)
-        hs = self.font_small.render(f"BEST RUN: {high_score}", True, (255, 200, 50))
+        # High Score Display (top-right corner, subtle) - Localized
+        best_run_label = self.game.get_text('BEST_RUN')
+        hs = self.font_small.render(f"{best_run_label}: {high_score}", True, (255, 200, 50))
         surface.blit(hs, (VIRTUAL_W - hs.get_width() - 20, 20))
+        
+        # Reset Button (top-left corner, red)
+        reset_btn_w, reset_btn_h = 120, 40
+        reset_btn_x, reset_btn_y = 20, 20
+        self.reset_btn_rect = pygame.Rect(reset_btn_x, reset_btn_y, reset_btn_w, reset_btn_h)
+        
+        is_reset_hovered = self.reset_btn_rect.collidepoint(mx, my)
+        reset_btn_fill = (120, 40, 40) if is_reset_hovered else (80, 20, 20)
+        reset_btn_border = (200, 80, 80) if is_reset_hovered else (150, 50, 50)
+        
+        pygame.draw.rect(surface, reset_btn_fill, self.reset_btn_rect, border_radius=8)
+        pygame.draw.rect(surface, reset_btn_border, self.reset_btn_rect, 2, border_radius=8)
+        
+        reset_text = self.font_bold.render(self.game.get_text("RESET_BTN"), True, (255, 200, 200))
+        surface.blit(reset_text, reset_text.get_rect(center=self.reset_btn_rect.center))
 
     def draw_round_select(self, surface, game):
         overlay = pygame.Surface((VIRTUAL_W, VIRTUAL_H), pygame.SRCALPHA)
@@ -904,6 +939,62 @@ class UIManager:
         nt = self.font_bold.render(self.t('NO'), True, (255,255,255))
         surface.blit(nt, nt.get_rect(center=no_btn.center))
         self.pause_buttons = {'YES': yes_btn, 'NO': no_btn}
+
+    def draw_reset_confirm_overlay(self, surface):
+        """Confirmation dialog for resetting progress"""
+        # Dark overlay
+        o = pygame.Surface((VIRTUAL_W, VIRTUAL_H), pygame.SRCALPHA)
+        o.fill((0, 0, 0, 200))
+        surface.blit(o, (0, 0))
+        
+        cx, cy = VIRTUAL_W // 2, VIRTUAL_H // 2
+        box = pygame.Rect(0, 0, 450, 280)
+        box.center = (cx, cy)
+        
+        # Draw box background and border
+        pygame.draw.rect(surface, (40, 20, 20), box, border_radius=15)
+        pygame.draw.rect(surface, (200, 80, 80), box, 3, border_radius=15)
+        
+        # Title
+        title = self.font_bold.render(self.game.get_text('RESET_CONFIRM_TITLE'), True, (255, 100, 100))
+        surface.blit(title, title.get_rect(center=(cx, cy - 80)))
+        
+        # Message (wrapped)
+        msg_lines = self.game.get_text('RESET_CONFIRM_MSG').split('\n')
+        msg_y = cy - 40
+        for line in msg_lines:
+            msg_surf = self.font_small.render(line, True, (255, 200, 200))
+            surface.blit(msg_surf, msg_surf.get_rect(center=(cx, msg_y)))
+            msg_y += 25
+        
+        # YES/NO buttons
+        yes_btn = pygame.Rect(0, 0, 100, 45)
+        yes_btn.center = (cx - 85, cy + 70)
+        no_btn = pygame.Rect(0, 0, 100, 45)
+        no_btn.center = (cx + 85, cy + 70)
+        
+        mx, my = pygame.mouse.get_pos()
+        
+        # YES button (red)
+        yes_color = (200, 50, 50)
+        if yes_btn.collidepoint(mx, my):
+            yes_color = (255, 80, 80)
+        pygame.draw.rect(surface, yes_color, yes_btn, border_radius=6)
+        pygame.draw.rect(surface, (255, 255, 255), yes_btn, 2, border_radius=6)
+        yes_text = self.font_bold.render(self.game.get_text('YES'), True, (255, 255, 255))
+        surface.blit(yes_text, yes_text.get_rect(center=yes_btn.center))
+        
+        # NO button (green)
+        no_color = (50, 150, 50)
+        if no_btn.collidepoint(mx, my):
+            no_color = (80, 200, 80)
+        pygame.draw.rect(surface, no_color, no_btn, border_radius=6)
+        pygame.draw.rect(surface, (255, 255, 255), no_btn, 2, border_radius=6)
+        no_text = self.font_bold.render(self.game.get_text('NO'), True, (255, 255, 255))
+        surface.blit(no_text, no_text.get_rect(center=no_btn.center))
+        
+        # Store button rects for event handling
+        self.reset_confirm_buttons = {'YES': yes_btn, 'NO': no_btn}
 
     def draw_training_overlay(self, surface, game, step):
         """Interactive tutorial overlay mapped to localized tutorial steps"""
@@ -1166,9 +1257,10 @@ class UIManager:
                 surface.blit(letter, letter.get_rect(center=placeholder_rect.center))
                 content_y += 52
             
-            # 2. İsim (kart genişliğine göre kısaltılmış)
+            # 2. İsim (kart genişliğine göre kısaltılmış) - Localized via get_item_info
+            item_info = self.game.get_item_info(totem.key)
             max_name_width = card_w - 10  # Kartın kenar boşlukları
-            name_display = totem.name
+            name_display = item_info['name']
             name_txt = self.font_bold.render(name_display, True, TOTAL_COLOR)
             
             # Metin genişliği kartı aşıyorsa kısalt
@@ -1176,7 +1268,7 @@ class UIManager:
                 name_display = name_display[:-1]
                 name_txt = self.font_bold.render(name_display + "..", True, TOTAL_COLOR)
             
-            if name_display != totem.name:
+            if name_display != item_info['name']:
                 name_txt = self.font_bold.render(name_display + "..", True, TOTAL_COLOR)
             
             name_rect = name_txt.get_rect(centerx=card_rect.centerx, top=content_y)
@@ -1441,8 +1533,8 @@ class UIManager:
         btn_text = self.font_big.render(self.t('ENTER_ETERNITY'), True, (255, 255, 255))
         surface.blit(btn_text, btn_text.get_rect(center=btn_rect.center))
         
-        # Infinity symbol hint below button
-        hint = self.font_small.render("(Endless Mode: ∞)", True, (150, 150, 150))
+        # Hint text (localized)
+        hint = self.font_small.render(self.game.get_text("DEMO_HINT_MSG"), True, (150, 150, 150))
         surface.blit(hint, hint.get_rect(center=(cx, btn_y + btn_h + 20)))
 
     def draw_collection(self, surface, game):
