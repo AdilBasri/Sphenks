@@ -18,14 +18,14 @@ class Glyph:
         """Rün kullanıldığında ne olacağını tanımlar"""
         if self.key == 'REFILL':
             game.void_count += 5
-            game.particle_system.create_text(game.w//2, game.h//2, "+5 AMMO", self.color)
+            game.particle_system.create_text(game.w//2, game.h//2, "+5 AMMO", self.color, font_path=game.font_name)
             return True # Başarılı kullanım
 
         elif self.key == 'RESET':
             # Eli yenile (Maliyet ödemeden)
             game.blocks.clear()
             game.refill_hand()
-            game.particle_system.create_text(game.w//2, game.h//2, "HAND RESET", self.color)
+            game.particle_system.create_text(game.w//2, game.h//2, "HAND RESET", self.color, font_path=game.font_name)
             return True
 
         elif self.key == 'STONE_BREAKER':
@@ -42,7 +42,7 @@ class Glyph:
                         cleared += 1
             
             if cleared > 0:
-                game.particle_system.create_text(game.w//2, game.h//2, "STONES CRUSHED!", self.color)
+                game.particle_system.create_text(game.w//2, game.h//2, "STONES CRUSHED!", self.color, font_path=game.font_name)
                 game.audio.play('explode')
                 return True
             else:

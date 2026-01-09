@@ -5,6 +5,7 @@ import random
 import math
 from settings import *
 from settings import STATE_PLAYING  # Tooltip kontrolü için
+from languages import LANGUAGES
 
 # --- MENÜ İÇİN UÇUŞAN DEKORATİF BLOK ---
 class MenuBlock:
@@ -187,13 +188,15 @@ class VoidWidget(pygame.sprite.Sprite):
     def draw(self, surface): surface.blit(self.image, self.rect)
 
 class UIManager:
-    def __init__(self):
-        self.font_small = pygame.font.SysFont(FONT_NAME, 12)
-        self.font_reg = pygame.font.SysFont(FONT_NAME, 14)
-        self.font_bold = pygame.font.SysFont(FONT_NAME, 16, bold=True)
-        self.font_score = pygame.font.SysFont(FONT_NAME, 22, bold=True)
-        self.font_big = pygame.font.SysFont(FONT_NAME, 32, bold=True)
-        self.title_font = pygame.font.SysFont(FONT_NAME, 60, bold=True)
+    def __init__(self, game):
+        self.game = game
+        self.font_small = None
+        self.font_reg = None
+        self.font_bold = None
+        self.font_score = None
+        self.font_big = None
+        self.title_font = None
+        self.refresh_fonts()
         
         self.void_widget = VoidWidget(VIRTUAL_W - 20, VIRTUAL_H - 20, scale=0.8)
         self.bg_tiles = []
@@ -236,6 +239,30 @@ class UIManager:
         except Exception as e:
             # Fallback: If images are missing, continue without background
             self.menu_bg_image = None
+
+    def _make_font(self, size, bold=False):
+        base_size = max(1, size + getattr(self.game, 'font_size_offset', 0))
+        try:
+            font = pygame.font.Font(self.game.font_name, base_size)
+        except FileNotFoundError:
+            fallback_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "fonts", "pixel.ttf")
+            print(f"Warning: Font {self.game.font_name} not found. Using fallback.")
+            if not os.path.exists(fallback_path):
+                fallback_path = None  # Use system default
+            font = pygame.font.Font(fallback_path, base_size)
+        font.set_bold(bold)
+        return font
+
+    def refresh_fonts(self):
+        self.font_small = self._make_font(12)
+        self.font_reg = self._make_font(14)
+        self.font_bold = self._make_font(16, bold=True)
+        self.font_score = self._make_font(22, bold=True)
+        self.font_big = self._make_font(32, bold=True)
+        self.title_font = self._make_font(60, bold=True)
+
+    def t(self, key):
+        return self.game.get_text(key)
 
     def load_title_assets(self):
         """1.png - 7.png arası harfleri yükler, boyutlandırır ve TitleLetter objelerine dönüştürür"""
@@ -436,22 +463,23 @@ class UIManager:
         cyan = (90, 200, 255)
         gray = (180, 180, 190)
 
-        layer_font = pygame.font.SysFont(FONT_NAME, 24, bold=True)
-        desc_font = pygame.font.SysFont(FONT_NAME, 12, bold=True)
+        layer_font = self._make_font(24, bold=True)
+        desc_font = self._make_font(12, bold=True)
 
         # Layer label at top
         if game.state == STATE_TRAINING:
-            layer_txt = layer_font.render("TRAINING", True, cyan)
+            layer_txt = layer_font.render(self.t('TRAINING'), True, cyan)
         elif game.endless_mode:
-            layer_txt = layer_font.render("LAYER ∞", True, gold)
+            layer_txt = layer_font.render(f"{self.t('LAYER')} ∞", True, gold)
         else:
-            layer_txt = layer_font.render(f"LAYER {game.ante} / 8", True, gold)
+            layer_txt = layer_font.render(f"{self.t('LAYER')} {game.ante} / 8", True, gold)
         surface.blit(layer_txt, layer_txt.get_rect(center=(cx, 35)))
 
         # Info section
         y_cursor = 80
         boss_desc = None
-        round_name = ["Small Quota", "Big Tribute", "Judgment"][game.round - 1]
+        round_key_list = ['QUOTA', 'TRIBUTE', 'JUDGMENT']
+        round_name = self.t(round_key_list[game.round - 1]) if 0 <= game.round - 1 < len(round_key_list) else ""
         round_col = TOTAL_COLOR
         if game.round == 3 and game.active_boss_effect:
             boss_key = game.active_boss_effect
@@ -469,7 +497,7 @@ class UIManager:
         else:
             y_cursor += 40
 
-        goal_lbl = self.font_small.render(f"Quota: {game.level_target}", True, gray)
+        goal_lbl = self.font_small.render(f"{self.t('QUOTA')}: {game.level_target}", True, gray)
         surface.blit(goal_lbl, goal_lbl.get_rect(center=(cx, y_cursor)))
         y_cursor += 14  # tighter spacing to lift score panel
 
@@ -490,8 +518,8 @@ class UIManager:
         left_x = inner_rect.x + third // 2
         mid_x = inner_rect.centerx
         right_x = inner_rect.right - third // 2
-        labor_lbl = self.font_small.render("LABOR", True, cyan)
-        favor_lbl = self.font_small.render("FAVOR", True, crimson)
+        labor_lbl = self.font_small.render(self.t('LABOR'), True, cyan)
+        favor_lbl = self.font_small.render(self.t('FAVOR'), True, crimson)
         x_lbl = self.font_small.render("X", True, (240, 240, 240))
         surface.blit(labor_lbl, labor_lbl.get_rect(center=(left_x, title_y)))
         surface.blit(x_lbl, x_lbl.get_rect(center=(mid_x, title_y)))
@@ -512,7 +540,7 @@ class UIManager:
         pygame.draw.line(surface, (80, 70, 90), (inner_rect.left + 10, divider_y), (inner_rect.right - 10, divider_y), 2)
 
         # Total score
-        total_label = self.font_reg.render("TOTAL SCORE", True, gold)
+        total_label = self.font_reg.render(f"{self.t('TOTAL')} SCORE", True, gold)
         total_y = divider_y + 14
         surface.blit(total_label, total_label.get_rect(center=(mid_x, total_y)))
         shake = random.randint(-1, 1) if game.state == STATE_SCORING else 0
@@ -521,7 +549,7 @@ class UIManager:
 
         y_cursor = tablet_rect.bottom + 12
 
-        lbl_round_score = self.font_reg.render("Shift Score", True, gray)
+        lbl_round_score = self.font_reg.render(self.t('SHIFT_SCORE'), True, gray)
         surface.blit(lbl_round_score, lbl_round_score.get_rect(center=(cx, y_cursor)))
         y_cursor += 20
         sc_col = (255, 255, 255) if game.score < game.level_target else (100, 255, 100)
@@ -534,7 +562,7 @@ class UIManager:
         if menu_btn.collidepoint(pygame.mouse.get_pos()): col = (90, 80, 100)
         pygame.draw.rect(surface, col, menu_btn, border_radius=8)
         pygame.draw.rect(surface, (150, 150, 150), menu_btn, 1, border_radius=8)
-        menu_txt = self.font_bold.render("MENU", True, (255, 255, 255))
+        menu_txt = self.font_bold.render(self.t('MENU'), True, (255, 255, 255))
         surface.blit(menu_txt, menu_txt.get_rect(center=menu_btn.center))
         game.menu_btn_rect = menu_btn
 
@@ -600,7 +628,7 @@ class UIManager:
         
         padding = 10
         tooltip_w = 160
-        desc_font = pygame.font.SysFont(FONT_NAME, 11)
+        desc_font = self._make_font(11)
         
         # Yükseklik hesapla
         title_h = 18
@@ -760,20 +788,21 @@ class UIManager:
             outline_rect = btn_rect.inflate(-2, -2)  # Shrink slightly for inner outline
             pygame.draw.rect(surface, darker_border, outline_rect, 1, border_radius=10)
             
-            # Render text with proper font scaling
-            text_font = pygame.font.SysFont(FONT_NAME, font_size, bold=True)
-            text_surface = text_font.render(label, True, text_color)
+            # Render text with proper font scaling (localized)
+            display_label = self.t(label)
+            text_font = self._make_font(font_size, bold=True)
+            text_surface = text_font.render(display_label, True, text_color)
             
             # Check if text fits - if not, use smaller font
             if text_surface.get_width() > width - 16:  # 8px padding on each side
-                text_font = pygame.font.SysFont(FONT_NAME, max(10, font_size - 2), bold=True)
-                text_surface = text_font.render(label, True, text_color)
+                text_font = self._make_font(max(10, font_size - 2), bold=True)
+                text_surface = text_font.render(display_label, True, text_color)
             
             # Center text both horizontally and vertically in button
             text_rect = text_surface.get_rect(center=btn_rect.center)
             surface.blit(text_surface, text_rect)
             
-            # Store button for click detection
+            # Store button for click detection (store key, not localized text)
             self.menu_buttons.append((btn_rect, label))
             
             # Move to next button position
@@ -788,13 +817,14 @@ class UIManager:
         overlay.fill((10, 10, 15, 240))
         surface.blit(overlay, (0,0))
         cx = VIRTUAL_W // 2
-        title = self.title_font.render(f"LAYER {game.ante}", True, (255, 255, 255))
+        title = self.title_font.render(f"{self.t('LAYER')} {game.ante}", True, (255, 255, 255))
         surface.blit(title, title.get_rect(center=(cx, 50)))
         
         panel_w, panel_h = 200, 300
         gap = 30
         start_x = cx - (1.5 * panel_w) - gap
-        blinds = ['Small Quota', 'Big Tribute', 'Judgment']
+        blind_keys = ['QUOTA', 'TRIBUTE', 'JUDGMENT']
+        blinds = [self.t(k) for k in blind_keys]
         colors = [(100, 150, 255), (255, 150, 50), (255, 50, 50)]
         targets = [game.get_blind_target(1), game.get_blind_target(2), game.get_blind_target(3)]
         
@@ -816,7 +846,7 @@ class UIManager:
             pygame.draw.rect(surface, border_col, rect, 3 if is_active else 1, border_radius=15)
             lbl = self.font_bold.render(blinds[i], True, colors[i] if not is_passed else (100,100,100))
             surface.blit(lbl, lbl.get_rect(center=(rect.centerx, rect.y + 30)))
-            score_lbl = self.font_score.render(f"Score: {targets[i]}", True, (255,255,255))
+            score_lbl = self.font_score.render(f"{self.t('TOTAL')}: {targets[i]}", True, (255,255,255))
             if is_passed: score_lbl.set_alpha(100)
             surface.blit(score_lbl, score_lbl.get_rect(center=(rect.centerx, rect.centery)))
             
@@ -835,7 +865,7 @@ class UIManager:
                 if btn_rect.collidepoint(mx, my):
                     b_col = (min(255, b_col[0]+30), min(255, b_col[1]+30), min(255, b_col[2]+30))
                 pygame.draw.rect(surface, b_col, btn_rect, border_radius=8)
-                btn_txt = self.font_bold.render("SELECT", True, (0,0,0))
+                btn_txt = self.font_bold.render(self.t('SELECT'), True, (0,0,0))
                 surface.blit(btn_txt, btn_txt.get_rect(center=btn_rect.center))
                 self.select_buttons.append(btn_rect)
 
@@ -851,14 +881,14 @@ class UIManager:
 
     def draw_pause_overlay(self, surface):
         o = pygame.Surface((VIRTUAL_W, VIRTUAL_H), pygame.SRCALPHA)
-        o.fill((0,0,0,200))
+        o.fill((0, 0, 0, 200))
         surface.blit(o, (0,0))
         cx, cy = VIRTUAL_W//2, VIRTUAL_H//2
         box = pygame.Rect(0, 0, 400, 250)
         box.center = (cx, cy)
         pygame.draw.rect(surface, (30, 30, 40), box, border_radius=15)
         pygame.draw.rect(surface, (100, 100, 100), box, 2, border_radius=15)
-        q = self.font_bold.render("Return to Main Menu?", True, (255, 255, 255))
+        q = self.font_bold.render(self.t('PAUSE_MSG'), True, (255, 255, 255))
         surface.blit(q, q.get_rect(center=(cx, cy - 40)))
         yes_btn = pygame.Rect(0, 0, 100, 40); yes_btn.center = (cx - 70, cy + 40)
         no_btn = pygame.Rect(0, 0, 100, 40); no_btn.center = (cx + 70, cy + 40)
@@ -866,80 +896,101 @@ class UIManager:
         c_yes = (200, 50, 50)
         if yes_btn.collidepoint(mx, my): c_yes = (255, 80, 80)
         pygame.draw.rect(surface, c_yes, yes_btn, border_radius=5)
-        yt = self.font_bold.render("YES", True, (255,255,255))
+        yt = self.font_bold.render(self.t('YES'), True, (255,255,255))
         surface.blit(yt, yt.get_rect(center=yes_btn.center))
         c_no = (50, 150, 50)
         if no_btn.collidepoint(mx, my): c_no = (80, 200, 80)
         pygame.draw.rect(surface, c_no, no_btn, border_radius=5)
-        nt = self.font_bold.render("NO", True, (255,255,255))
+        nt = self.font_bold.render(self.t('NO'), True, (255,255,255))
         surface.blit(nt, nt.get_rect(center=no_btn.center))
         self.pause_buttons = {'YES': yes_btn, 'NO': no_btn}
 
     def draw_training_overlay(self, surface, game, step):
-        """Interactive tutorial overlay with 6-step progression and guided actions"""
+        """Interactive tutorial overlay mapped to localized tutorial steps"""
         if not getattr(game, 'tutorial_active', True):
             return
-        
-        # Right-side panel geometry
+
+        # Right-side panel geometry (adjusted per step to avoid covering key areas)
         panel_w = 230
-        panel_h = VIRTUAL_H - 140  # Leave room above the hand area
         panel_x = VIRTUAL_W - panel_w - 10
         panel_y = 20
-        
+        base_panel_h = VIRTUAL_H - 140  # default height leaves room above hand
+        if step == 2:
+            panel_h = VIRTUAL_H - 240  # Keep clear of trash/void area
+        elif step == 5:
+            panel_h = VIRTUAL_H - 200  # Keep clear of hand/blocks area
+        else:
+            panel_h = base_panel_h
+
+        # Localized keys per tutorial step
+        step_keys = {
+            0: ("TUT_STEP0_TITLE", "TUT_STEP0_MSG"),
+            1: ("TUT_STEP1_TITLE", "TUT_STEP1_MSG"),
+            2: ("TUT_STEP2_TITLE", "TUT_STEP2_MSG"),
+            3: ("TUT_STEP3_TITLE", "TUT_STEP3_MSG"),
+            4: ("TUT_STEP4_TITLE", "TUT_STEP4_MSG"),
+            5: ("TUT_STEP5_TITLE", "TUT_STEP5_MSG"),
+            6: ("TUT_STEP6_TITLE", "TUT_STEP6_MSG"),
+        }
+
+        def step_text(step_id):
+            t_key, m_key = step_keys.get(step_id, step_keys[0])
+            return self.t(t_key), self.t(m_key)
+
         # Define tutorial content for all 7 steps (0-based)
         tutorial_data = {
             0: {
-                'title': "WELCOME TO SPHENKS!",
-                'text': "Drag a block from your hand to the grid to start.\nPlace it on an empty space to fill your grid.",
+                'title': step_text(0)[0],
+                'text': step_text(0)[1],
                 'highlight': pygame.Rect(SIDEBAR_WIDTH, VIRTUAL_H - HAND_BG_HEIGHT, PLAY_AREA_W, HAND_BG_HEIGHT),
                 'show_continue': False,
                 'condition_text': None
             },
             1: {
-                'title': "MASTER CONTROLS",
-                'text': "You can transform your blocks!\n\n[R] to ROTATE the block\n[E] to FLIP the block horizontally\n\nTry pressing R or E while holding a block!",
+                'title': step_text(1)[0],
+                'text': step_text(1)[1],
                 'highlight': pygame.Rect(SIDEBAR_WIDTH, VIRTUAL_H - HAND_BG_HEIGHT, PLAY_AREA_W, HAND_BG_HEIGHT),
                 'show_continue': False,
-                'condition_text': "Press [R] or [E] to continue"
+                'condition_text': self.t('TUT_STEP1_COND')
             },
             2: {
-                'title': "PURIFY THE HAND",
-                'text': "Sometimes you need new tools.\n\nDrag a block to the TRASH ICON (Red Square) to discard it and draw new ones.",
+                'title': step_text(2)[0],
+                'text': step_text(2)[1],
                 'highlight': game.trash_rect.inflate(10, 10),
                 'show_continue': False,
                 'condition_text': None
             },
             3: {
-                'title': "SCORING & STRATEGY",
-                'text': "Clear lines horizontally or vertically to earn points.\nMatch block colors for bonus multipliers!\nReach your target score to advance to the next quota.",
+                'title': step_text(3)[0],
+                'text': step_text(3)[1],
                 'highlight': pygame.Rect(SIDEBAR_WIDTH + 50, 50, GRID_WIDTH + 50, GRID_HEIGHT + 50),
                 'show_continue': True,
                 'condition_text': None
             },
             4: {
-                'title': "MEET YOUR ARSENAL",
-                'text': "You now have a JOKER (permanent passive bonus) and a RUNE (one-time consumable effect).\n\nJokers power up your plays.\nRunes trigger when you apply them to block cells.",
+                'title': step_text(4)[0],
+                'text': step_text(4)[1],
                 'highlight': pygame.Rect(SIDEBAR_WIDTH, 50, SIDEBAR_WIDTH - 10, 120),
                 'show_continue': True,
                 'condition_text': None
             },
             5: {
-                'title': "USE YOUR RUNE",
-                'text': "Drag the highlighted RUNE to a cell on one of your blocks.\n\nThis demonstrates how consumables enhance your blocks.",
+                'title': step_text(5)[0],
+                'text': step_text(5)[1],
                 'highlight': None,  # Will be drawn dynamically below
                 'show_continue': False,
-                'condition_text': "Drag the rune to a block cell",
+                'condition_text': self.t('TUT_STEP5_COND'),
                 'draw_rune_highlight': True  # Special flag for rune highlighting
             },
             6: {
-                'title': "YOU'RE READY!",
-                'text': "You now understand the core mechanics:\n\n• Drag blocks to the grid\n• Rotate and flip with [R] and [E]\n• Discard to purify your hand\n• Use Runes to enhance your strategy\n• Build up your deck with Jokers\n\nGood luck, puzzle master!",
+                'title': step_text(6)[0],
+                'text': step_text(6)[1],
                 'highlight': None,
                 'show_continue': True,
                 'condition_text': None
             }
         }
-        
+
         current = tutorial_data.get(step, tutorial_data[0])
         
         # Draw highlight around important areas (if specified)
@@ -1055,7 +1106,7 @@ class UIManager:
         overlay.fill(SHOP_BG_COLOR)
         surface.blit(overlay, (0,0))
         
-        lbl = self.font_big.render("BAZAAR", True, ACCENT_COLOR)
+        lbl = self.font_big.render(self.t('BAZAAR'), True, ACCENT_COLOR)
         surface.blit(lbl, lbl.get_rect(center=(VIRTUAL_W//2, 30)))
         
         # Kredi Göstergesi
@@ -1078,7 +1129,7 @@ class UIManager:
         card_y = 60
         
         # Totem Başlığı
-        totem_header = self.font_bold.render("TOTEMS", True, (200, 200, 200))
+        totem_header = self.font_bold.render(self.t('TOTEMS'), True, (200, 200, 200))
         surface.blit(totem_header, (start_x, card_y - 20))
         
         for i, totem in enumerate(game.shop_totems):
@@ -1133,7 +1184,7 @@ class UIManager:
             content_y += 18
             
             # 3. Kısa Açıklama (1-2 satır)
-            desc_font = pygame.font.SysFont(FONT_NAME, 10)
+            desc_font = self._make_font(10)
             desc_short = totem.desc[:20] + ".." if len(totem.desc) > 22 else totem.desc
             desc_txt = desc_font.render(desc_short, True, (180, 180, 180))
             desc_rect = desc_txt.get_rect(centerx=card_rect.centerx, top=content_y)
@@ -1166,7 +1217,7 @@ class UIManager:
         rune_card_h = 120
         rune_count = len(game.shop_runes)
         if rune_count > 0:
-            rune_header = self.font_bold.render("RUNES", True, (200, 200, 200))
+            rune_header = self.font_bold.render(self.t('RUNES'), True, (200, 200, 200))
             rune_header_y = card_y + card_h + 30
             surface.blit(rune_header, (start_x, rune_header_y - 20))
             
@@ -1193,7 +1244,7 @@ class UIManager:
                 pygame.draw.circle(surface, (20, 20, 30), (rune_rect.centerx, circle_y), 25)
                 pygame.draw.circle(surface, rune.color, (rune_rect.centerx, circle_y), 23, 3)
                 
-                icon_font = pygame.font.SysFont("Arial", 24, bold=True)
+                icon_font = self._make_font(24, bold=True)
                 icon_txt = icon_font.render(rune.icon, True, rune.color)
                 surface.blit(icon_txt, icon_txt.get_rect(center=(rune_rect.centerx, circle_y)))
                 
@@ -1239,16 +1290,16 @@ class UIManager:
         nxt_col = (60, 80, 60) if nxt_hovered else (40, 60, 40)
         pygame.draw.rect(surface, nxt_col, nxt_rect, border_radius=8)
         pygame.draw.rect(surface, (100, 200, 100), nxt_rect, 2, border_radius=8)
-        nxt = self.font_bold.render("NEXT ROUND >", True, (255,255,255))
+        nxt = self.font_bold.render(self.t('NEXT ROUND >'), True, (255,255,255))
         surface.blit(nxt, nxt.get_rect(center=nxt_rect.center))
 
     def draw_game_over(self, surface, score):
         o = pygame.Surface((VIRTUAL_W, VIRTUAL_H), pygame.SRCALPHA)
         o.fill((0,0,0,220))
         surface.blit(o, (0,0))
-        t = self.title_font.render("GAME OVER", True, (255, 50, 50))
-        s = self.font_big.render(f"Score: {score}", True, (255, 255, 255))
-        r = self.font_reg.render("Press R to Restart", True, (150, 150, 150))
+        t = self.title_font.render(self.t('GAME OVER'), True, (255, 50, 50))
+        s = self.font_big.render(f"{self.t('TOTAL')}: {score}", True, (255, 255, 255))
+        r = self.font_reg.render(self.t('Press R to Restart'), True, (150, 150, 150))
         cx, cy = VIRTUAL_W//2, VIRTUAL_H//2
         surface.blit(t, t.get_rect(center=(cx, cy - 50)))
         surface.blit(s, s.get_rect(center=(cx, cy + 10)))
@@ -1256,7 +1307,6 @@ class UIManager:
 
     def draw_debt_screen(self, surface, game):
         """Dramatic debt repayment screen with animations"""
-        from settings import PHARAOH_QUOTES, FREEDOM_QUOTES
         
         # Black background with fade
         alpha = min(255, game.debt_animation_timer * 10)
@@ -1268,7 +1318,8 @@ class UIManager:
         
         # Payment amount indicator (top)
         if game.debt_animation_timer > 10:
-            payment_text = self.font_bold.render(f"PAYMENT: -{game.debt_payment_amount:,}", True, (100, 255, 100))
+            payment_label = f"{self.t('PAYMENT')}: -{game.debt_payment_amount:,}"
+            payment_text = self.font_bold.render(payment_label, True, (100, 255, 100))
             surface.blit(payment_text, payment_text.get_rect(center=(cx, 60)))
         
         # Debt number with shake and scale
@@ -1305,16 +1356,13 @@ class UIManager:
             surface.blit(debt_surface, debt_surface.get_rect(center=(cx + shake_x, cy - 40 + shake_y)))
             
             # "TOTAL DEBT" label
-            label = self.font_bold.render("TOTAL DEBT", True, (150, 150, 150))
+            label = self.font_bold.render(self.t('TOTAL_DEBT'), True, (150, 150, 150))
             surface.blit(label, label.get_rect(center=(cx, cy - 120)))
         
         # Pharaoh / Freedom quote with typewriter effect (bottom)
+        # Now uses localized text from current_quote_text
         if game.debt_animation_timer > 90:
-            quotes = FREEDOM_QUOTES if getattr(game, 'debt_freedom', False) else PHARAOH_QUOTES
-            # Guard against out-of-range
-            idx = max(0, min(game.debt_quote_index, len(quotes) - 1))
-            quote = quotes[idx]
-            displayed_quote = quote[:game.debt_quote_char_index]
+            displayed_quote = game.current_quote_text[:game.debt_quote_char_index]
             
             quote_text = self.font_reg.render(displayed_quote, True, (200, 150, 50))
             surface.blit(quote_text, quote_text.get_rect(center=(cx, cy + 100)))
@@ -1323,7 +1371,7 @@ class UIManager:
         if game.debt_animation_timer > 80 and hasattr(game, 'newly_unlocked_items') and game.newly_unlocked_items:
             for i, item in enumerate(game.newly_unlocked_items):
                 unlock_y = cy + 50 + (i * 30)
-                unlock_text = self.font_bold.render(f"UNLOCKED: {item['name']}", True, (255, 215, 0))
+                unlock_text = self.font_bold.render(f"{self.t('UNLOCKED')}: {item['name']}", True, (255, 215, 0))
                 surface.blit(unlock_text, unlock_text.get_rect(center=(cx, unlock_y)))
                 
                 desc_text = self.font_small.render("Keep working!", True, (200, 200, 200))
@@ -1347,7 +1395,7 @@ class UIManager:
             pygame.draw.rect(surface, btn_color, btn_rect, border_radius=8)
             pygame.draw.rect(surface, border_color, btn_rect, 2, border_radius=8)
             
-            btn_text = self.font_bold.render("CONTINUE", True, (255, 255, 255))
+            btn_text = self.font_bold.render(self.t('CONTINUE'), True, (255, 255, 255))
             surface.blit(btn_text, btn_text.get_rect(center=btn_rect.center))
 
     def draw_demo_end(self, surface, game):
@@ -1361,23 +1409,16 @@ class UIManager:
         cy = VIRTUAL_H // 2
         
         # Title
-        title = self.title_font.render("DEMO COMPLETED", True, ACCENT_COLOR)
+        title = self.title_font.render(self.t('DEMO_TITLE'), True, ACCENT_COLOR)
         surface.blit(title, title.get_rect(center=(cx, cy - 140)))
-        
-        # Main message - Line 1
-        msg1 = self.font_big.render("You have survived 8 Layers...", True, (255, 255, 255))
-        surface.blit(msg1, msg1.get_rect(center=(cx, cy - 60)))
-        
-        # Main message - Line 2
-        msg2 = self.font_bold.render("for now.", True, (255, 150, 150))
-        surface.blit(msg2, msg2.get_rect(center=(cx, cy - 20)))
-        
-        # Subtitle
-        subtitle1 = self.font_reg.render("The Pharaoh's debt is not fully paid.", True, (200, 200, 200))
-        surface.blit(subtitle1, subtitle1.get_rect(center=(cx, cy + 30)))
-        
-        subtitle2 = self.font_reg.render("Continue in ENDLESS MODE to seek the True Ending.", True, (200, 200, 200))
-        surface.blit(subtitle2, subtitle2.get_rect(center=(cx, cy + 55)))
+
+        # Localized message body
+        msg_lines = self.t('DEMO_MSG').split('\n')
+        start_y = cy - 70
+        for i, line in enumerate(msg_lines):
+            line_font = self.font_big if i == 0 else self.font_reg
+            line_surface = line_font.render(line, True, (255, 255, 255))
+            surface.blit(line_surface, line_surface.get_rect(center=(cx, start_y + i * 35)))
         
         # Endless mode button
         btn_w, btn_h = 300, 60
@@ -1397,7 +1438,7 @@ class UIManager:
         pygame.draw.rect(surface, btn_color, btn_rect, border_radius=12)
         pygame.draw.rect(surface, border_color, btn_rect, 3, border_radius=12)
         
-        btn_text = self.font_big.render("ENTER ETERNITY", True, (255, 255, 255))
+        btn_text = self.font_big.render(self.t('ENTER_ETERNITY'), True, (255, 255, 255))
         surface.blit(btn_text, btn_text.get_rect(center=btn_rect.center))
         
         # Infinity symbol hint below button
@@ -1416,7 +1457,7 @@ class UIManager:
         cx = VIRTUAL_W // 2
         
         # Title
-        title = self.title_font.render("COLLECTION", True, ACCENT_COLOR)
+        title = self.title_font.render(self.t('COLLECTION'), True, ACCENT_COLOR)
         surface.blit(title, title.get_rect(center=(cx, 40)))
         
         # Progress indicator
@@ -1426,10 +1467,10 @@ class UIManager:
         remaining = max(0, total_debt - total_paid)
         unlocked_count = len([item for item in COLLECTIBLES if game.save_manager.is_unlocked(item['id'])])
         
-        progress_text = self.font_bold.render(f"Unlocked: {unlocked_count}/{len(COLLECTIBLES)}", True, (255, 255, 255))
+        progress_text = self.font_bold.render(f"{self.t('Unlocked')}: {unlocked_count}/{len(COLLECTIBLES)}", True, (255, 255, 255))
         surface.blit(progress_text, progress_text.get_rect(center=(cx, 80)))
         
-        debt_text = self.font_reg.render(f"Debt Paid: {total_paid:,} / {total_debt:,}", True, (200, 200, 200))
+        debt_text = self.font_reg.render(f"{self.t('Debt Paid')}: {total_paid:,} / {total_debt:,}", True, (200, 200, 200))
         surface.blit(debt_text, debt_text.get_rect(center=(cx, 105)))
         
         # Grid of collectibles (2 columns, 4 rows = 8 items)
@@ -1487,7 +1528,7 @@ class UIManager:
             
             if is_unlocked:
                 # Show icon (emoji)
-                icon_font = pygame.font.SysFont("Arial", 48)
+                icon_font = self._make_font(48)
                 icon_surface = icon_font.render(item['icon'], True, (255, 255, 255))
                 surface.blit(icon_surface, icon_surface.get_rect(center=(card_rect.centerx, card_rect.y + 40)))
                 
@@ -1542,7 +1583,7 @@ class UIManager:
         pygame.draw.rect(surface, btn_color, back_btn, border_radius=8)
         pygame.draw.rect(surface, border_color, back_btn, 2, border_radius=8)
         
-        back_text = self.font_bold.render("BACK", True, (255, 255, 255))
+        back_text = self.font_bold.render(self.t('BACK'), True, (255, 255, 255))
         surface.blit(back_text, back_text.get_rect(center=back_btn.center))
     
     def _wrap_text(self, text, max_width, font):
@@ -1578,7 +1619,7 @@ class UIManager:
         cy = VIRTUAL_H // 2
         
         # Title
-        title = self.title_font.render("SETTINGS", True, ACCENT_COLOR)
+        title = self.title_font.render(self.t('SETTINGS'), True, ACCENT_COLOR)
         surface.blit(title, title.get_rect(center=(cx, 40)))
         
         # Panel
@@ -1600,7 +1641,8 @@ class UIManager:
             game.temp_settings = {
                 'fullscreen': settings.get('fullscreen', False),
                 'volume': settings.get('volume', 0.5),
-                'resolution_index': self._get_resolution_index(game)
+                'resolution_index': self._get_resolution_index(game),
+                'language': settings.get('language', game.current_language)
             }
         
         mx, my = pygame.mouse.get_pos()
@@ -1630,6 +1672,22 @@ class UIManager:
         if not hasattr(self, 'settings_buttons'):
             self.settings_buttons = {}
         self.settings_buttons['fullscreen'] = toggle_rect
+
+        # --- LANGUAGE SELECTOR ---
+        y_offset += 60
+        lang_label = self.font_bold.render(f"{self.t('LANGUAGE') if self.t('LANGUAGE') else 'Language'}:", True, (255, 255, 255))
+        surface.blit(lang_label, (panel_x + 50, y_offset))
+
+        lang_code = game.temp_settings.get('language', game.current_language)
+        lang_name = LANGUAGES.get(lang_code, {}).get('name', lang_code)
+        lang_rect = pygame.Rect(panel_x + panel_w - 220, y_offset - 10, 180, 40)
+        hover_lang = lang_rect.collidepoint(mx, my)
+        lang_bg = (60, 60, 80) if hover_lang else (40, 40, 55)
+        pygame.draw.rect(surface, lang_bg, lang_rect, border_radius=8)
+        pygame.draw.rect(surface, ACCENT_COLOR if hover_lang else (120, 120, 140), lang_rect, 2, border_radius=8)
+        lang_text = self.font_bold.render(f"{lang_name}", True, (255, 255, 255))
+        surface.blit(lang_text, lang_text.get_rect(center=lang_rect.center))
+        self.settings_buttons['language'] = lang_rect
         
         # --- VOLUME SLIDER ---
         y_offset += 80

@@ -5,7 +5,8 @@ import random
 import math
 import os
 from settings import *
-from settings import USE_FULLSCREEN, WINDOW_W, WINDOW_H, STATE_DEBT, PHARAOH_QUOTES, COLLECTIBLES, STATE_COLLECTION, STATE_SETTINGS, STATE_TRAINING, RESOLUTIONS, STATE_INTRO, STATE_DEMO_END
+from settings import USE_FULLSCREEN, WINDOW_W, WINDOW_H, STATE_DEBT, COLLECTIBLES, STATE_COLLECTION, STATE_SETTINGS, STATE_TRAINING, RESOLUTIONS, STATE_INTRO, STATE_DEMO_END
+from languages import LANGUAGES
 from grid import Grid
 import intro
 from block import Block
@@ -38,6 +39,7 @@ class Game:
         self.debt_quote_char_index = 0
         self.debt_quote_timer = 0
         # Active quote text for debt typewriter effect (defaults safe)
+        self.current_quote_key = "PHARAOH_1"  # Default key for quote lookup
         self.current_quote_text = "..."
         self.newly_unlocked_items = []  # Items unlocked in this debt screen
         # Global input guard to prevent ghost clicks after state changes
@@ -57,6 +59,15 @@ class Game:
         self.fullscreen = False
         self.theme = 'NEON'
 
+        # Language / font setup with saved preference and safety fallback
+        initial_lang = saved_settings.get('language', DEFAULT_LANGUAGE) if isinstance(saved_settings, dict) else DEFAULT_LANGUAGE
+        if initial_lang not in AVAILABLE_LANGUAGES:
+            initial_lang = DEFAULT_LANGUAGE
+        self.current_language = initial_lang
+        lang_meta = LANGUAGES.get(self.current_language, next(iter(LANGUAGES.values())))
+        self.font_name = lang_meta.get('font', pygame.font.get_default_font())
+        self.font_size_offset = lang_meta.get('size_offset', 0)
+
         # Display / systems
         # Always start windowed; fullscreen is applied via a late toggle
         flags = pygame.SCALED | pygame.RESIZABLE
@@ -67,7 +78,7 @@ class Game:
         self.w = VIRTUAL_W
         self.h = VIRTUAL_H
         self.audio = AudioManager()
-        self.ui = UIManager()
+        self.ui = UIManager(self)
         self.crt = CRTManager()
         
         # Initialize intro video manager (after screen creation)
@@ -108,6 +119,35 @@ class Game:
                 # Fallback: use existing toggle method
                 self.toggle_fullscreen()
 
+        # Apply persisted audio/language preferences after subsystems exist
+        self._apply_saved_settings()
+
+    def get_text(self, key):
+        """Return localized text for current language, fallback to key."""
+        lang_pack = LANGUAGES.get(self.current_language, LANGUAGES.get(DEFAULT_LANGUAGE, {}))
+        return lang_pack.get("text", {}).get(key, key)
+
+    def set_language(self, lang_code, play_sound=True):
+        """Switch active language, update fonts, and optionally play select sound."""
+        target = lang_code if lang_code in LANGUAGES else DEFAULT_LANGUAGE
+        self.current_language = target
+        meta = LANGUAGES.get(target, LANGUAGES.get(DEFAULT_LANGUAGE, {}))
+        self.font_name = meta.get("font", pygame.font.get_default_font())
+        self.font_size_offset = meta.get("size_offset", 0)
+        if hasattr(self, 'ui'):
+            self.ui.refresh_fonts()
+        # Persist language choice immediately
+        try:
+            if hasattr(self, 'save_manager') and hasattr(self.save_manager, 'data'):
+                if 'settings' not in self.save_manager.data or not isinstance(self.save_manager.data['settings'], dict):
+                    self.save_manager.data['settings'] = {}
+                self.save_manager.data['settings']['language'] = target
+                self.save_manager.save_data()
+        except Exception:
+            pass
+        if play_sound and hasattr(self.audio, 'play'):
+            self.audio.play('select')
+
     def init_tutorial_mode(self):
         """Initialize the tutorial with a simple setup for learning"""
         # Reset tutorial progress
@@ -125,6 +165,9 @@ class Game:
         tutorial_shapes = ['I', 'DOT', 'L']  # Simple shapes for learning
         for shape in tutorial_shapes:
             self.blocks.append(Block(shape))
+        # Ensure hand is topped up in case this is re-entered
+        while len(self.blocks) < 3:
+            self.blocks.append(Block(random.choice(tutorial_shapes)))
         
         self.position_blocks_in_hand()
         
@@ -135,6 +178,18 @@ class Game:
         self.combo_counter = 0
         self.level_target = 100  # Tutorial target (not enforced)
         self.consumables = []  # No runes initially (spawned in step 3)
+        self.credits = max(self.credits, 50)  # Ensure the player has spending power for demos
+
+    def _spawn_tutorial_rune(self):
+        """Spawn a single demo rune for tutorial steps."""
+        from runes import Rune
+        self.consumables.clear()
+        self.consumables.append(Rune('rune_fire'))
+        self.tutorial_rune_applied = False
+        for r in self.consumables:
+            r.x = SIDEBAR_WIDTH + 20
+            r.y = 60
+            r.rect = pygame.Rect(r.x, r.y, 40, 40)
 
     def get_blind_target(self, round_num):
         base_target = 300 * (self.ante ** 1.3)
@@ -201,7 +256,7 @@ class Game:
         
         if self.active_boss_effect == 'The Wall':
             self.grid.place_stones(3)
-            self.particle_system.create_text(self.w//2, self.h//2, "BOSS: THE WALL", (150, 150, 150))
+            self.particle_system.create_text(self.w//2, self.h//2, "BOSS: THE WALL", (150, 150, 150), font_path=self.font_name)
             self.particle_system.atmosphere.trigger_shake(10, 4) 
             self.crt.trigger_aberration(amount=2, duration=10)
 
@@ -244,7 +299,7 @@ class Game:
                     money, desc = TotemLogic.apply_round_end(t.key, self)
                     if money > 0:
                         self.credits += money
-                        self.particle_system.create_text(self.w//2, self.h//2, desc, (100, 255, 100))
+                        self.particle_system.create_text(self.w//2, self.h//2, desc, (100, 255, 100), font_path=self.font_name)
             
             # Check for Demo End (Ante 8 Boss completion)
             if self.ante == 8 and self.round == 3 and not self.endless_mode:
@@ -285,10 +340,14 @@ class Game:
 
         # Step 6: choose quotes based on freedom state and set active text
         self.debt_freedom = (new_debt == 0)
-        from settings import FREEDOM_QUOTES
-        quotes = FREEDOM_QUOTES if self.debt_freedom else PHARAOH_QUOTES
-        self.debt_quote_index = random.randint(0, len(quotes) - 1)
-        self.current_quote_text = quotes[self.debt_quote_index]
+        # Define quote keys for localization
+        freedom_keys = ["FREEDOM_1", "FREEDOM_2"]
+        pharaoh_keys = ["PHARAOH_1", "PHARAOH_2"]
+        # Select appropriate key based on debt state
+        quote_keys = freedom_keys if self.debt_freedom else pharaoh_keys
+        self.current_quote_key = random.choice(quote_keys)
+        # Fetch localized text immediately
+        self.current_quote_text = self.get_text(self.current_quote_key)
 
         # Step 7: initialize animation timers
         self.debt_animation_timer = 0
@@ -317,7 +376,7 @@ class Game:
                 self.crt.trigger_aberration(amount=5, duration=60)
                 if self.totems:
                     removed = self.totems.pop(random.randrange(len(self.totems)))
-                    self.particle_system.create_text(self.w//2, self.h//2, f"WORLD SHIFT: {removed.name} DESTROYED!", (255, 50, 50))
+                    self.particle_system.create_text(self.w//2, self.h//2, f"WORLD SHIFT: {removed.name} DESTROYED!", (255, 50, 50), font_path=self.font_name)
                 self.force_omega_shop = True
                 
         self.state = STATE_ROUND_SELECT
@@ -361,6 +420,7 @@ class Game:
         # Update settings in save data
         save_data['settings']['fullscreen'] = self.temp_settings['fullscreen']
         save_data['settings']['volume'] = self.temp_settings['volume']
+        save_data['settings']['language'] = self.temp_settings.get('language', self.current_language)
         
         # Apply resolution
         res_index = self.temp_settings['resolution_index']
@@ -379,6 +439,9 @@ class Game:
         # Apply volume
         if hasattr(self.audio, 'set_volume'):
             self.audio.set_volume(self.temp_settings['volume'])
+
+        # Apply language immediately
+        self.set_language(save_data['settings']['language'], play_sound=False)
         
         # Save to file
         self.save_manager.save_data(save_data)
@@ -395,6 +458,10 @@ class Game:
         volume = settings.get('volume', 0.5)
         if hasattr(self.audio, 'set_volume'):
             self.audio.set_volume(volume)
+
+        # Apply language (refresh fonts without playing sounds on startup)
+        lang_code = settings.get('language', DEFAULT_LANGUAGE)
+        self.set_language(lang_code, play_sound=False)
 
     def position_blocks_in_hand(self):
         area_center_x = SIDEBAR_WIDTH + (PLAY_AREA_W // 2)
@@ -474,7 +541,7 @@ class Game:
             for owned in self.totems:
                 if owned.key == 'cashback':
                     self.credits += 2
-                    self.particle_system.create_text(self.w//2, 100, "+$2 Cashback", (100, 255, 100))
+                    self.particle_system.create_text(self.w//2, 100, "+$2 Cashback", (100, 255, 100), font_path=self.font_name)
             if t in self.shop_totems: self.shop_totems.remove(t)
             self.audio.play('clear')
 
@@ -611,13 +678,16 @@ class Game:
             elif self.state == STATE_TRAINING:
                 # --- Generic input handling first to avoid softlocks ---
                 if event.type == pygame.KEYDOWN:
-                    if self.tutorial_step == 1 and (event.key == pygame.K_r or event.key == pygame.K_e):
-                        self.tutorial_key_pressed = True
-                        self.audio.play('select')
-                    if event.key == pygame.K_r and self.held_block:
-                        self.rotate_held_block()
-                    if event.key == pygame.K_e and self.held_block:
-                        self.flip_held_block()
+                    if event.key in (pygame.K_r, pygame.K_e):
+                        if self.tutorial_step == 1:
+                            self.tutorial_key_pressed = True
+                            self.tutorial_step = 2
+                            self.audio.play('select')
+                        if self.held_block:
+                            if event.key == pygame.K_r:
+                                self.rotate_held_block()
+                            elif event.key == pygame.K_e:
+                                self.flip_held_block()
 
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     if self.input_cooldown > 0:
@@ -626,7 +696,7 @@ class Game:
                     rune_clicked = False
                     block_clicked = False
 
-                    # Allow rune pickup (step 4+)
+                    # Allow rune pickup when available
                     for r in self.consumables:
                         if r.rect and r.rect.collidepoint(mx, my):
                             self.held_rune = r
@@ -646,10 +716,27 @@ class Game:
                                 block_clicked = True
                                 break
 
-                    # Step progression clicks (only if overlay active and no pickup happened)
-                    if getattr(self, 'tutorial_active', True) and self.tutorial_step in [3, 4, 6] and not rune_clicked and not block_clicked and self.input_cooldown == 0:
-                        self.audio.play('select')
-                        self.tutorial_step += 1
+                    # Step progression clicks (only when no pickup happened)
+                    if not rune_clicked and not block_clicked:
+                        if self.tutorial_step == 0:
+                            self.audio.play('select')
+                            self.tutorial_step = 1
+                        elif self.tutorial_step == 1:
+                            self.audio.play('select')
+                            self.tutorial_step = 2
+                        elif self.tutorial_step == 3:
+                            self.audio.play('select')
+                            self.tutorial_step = 4
+                        elif self.tutorial_step == 4:
+                            self.audio.play('select')
+                            self.tutorial_step = 5
+                            if len(self.consumables) == 0:
+                                self._spawn_tutorial_rune()
+                        elif self.tutorial_step == 6:
+                            self.audio.play('select')
+                            self.state = STATE_MENU
+                            self.init_game_session_data()
+                            self.input_cooldown = 10
 
                 if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                     # Rune drop handling first (apply to block cell)
@@ -673,7 +760,24 @@ class Game:
 
                     # Block drop handling
                     if self.held_block:
-                        if self.tutorial_step == 0 or self.tutorial_step >= 5:
+                        if self.tutorial_step == 2 and self.trash_rect.collidepoint(mx, my):
+                            # Tutorial discard: recycle hand immediately and advance
+                            if self.held_block in self.blocks:
+                                self.blocks.remove(self.held_block)
+                            # Top the hand back up for the next step
+                            tutorial_shapes = ['I', 'DOT', 'L']
+                            while len(self.blocks) < 3:
+                                try:
+                                    new_shape = self.get_smart_block_key()
+                                except Exception:
+                                    new_shape = random.choice(tutorial_shapes)
+                                self.blocks.append(Block(new_shape))
+                            self.position_blocks_in_hand()
+                            self.audio.play('select')
+                            self.tutorial_step = 3
+                            self.held_block = None
+                            return
+                        else:
                             cur_x = mx - self.held_block.offset_x
                             cur_y = my - self.held_block.offset_y
                             check_x = cur_x + (TILE_SIZE / 2)
@@ -682,35 +786,14 @@ class Game:
                             
                             if gr is not None and gc is not None and self.grid.is_valid_position(self.held_block, gr, gc):
                                 self.grid.place_block(self.held_block, gr, gc)
-                                self.blocks.remove(self.held_block)
+                                if self.held_block in self.blocks:
+                                    self.blocks.remove(self.held_block)
                                 self.audio.play('place')
-                                if self.tutorial_step == 5:
-                                    self.tutorial_step = 6
-                                elif self.tutorial_step == 0:
-                                    self.tutorial_step = 1
                                 self.held_block = None
                             else:
                                 self.held_block.dragging = False
                                 self.position_blocks_in_hand()
                                 self.held_block = None
-                        elif self.tutorial_step == 2 and self.trash_rect.collidepoint(mx, my):
-                            # Tutorial discard: recycle hand immediately and advance
-                            if self.held_block in self.blocks:
-                                self.blocks.remove(self.held_block)
-                            try:
-                                new_shape = self.get_smart_block_key()
-                            except Exception:
-                                new_shape = random.choice(['I', 'DOT', 'L'])
-                            self.blocks.append(Block(new_shape))
-                            self.position_blocks_in_hand()
-                            self.audio.play('select')
-                            self.tutorial_step = 3
-                            self.held_block = None
-                            return
-                        else:
-                            self.held_block.dragging = False
-                            self.position_blocks_in_hand()
-                            self.held_block = None
 
             elif self.state == STATE_PLAYING:
                 if event.type == pygame.KEYDOWN:
@@ -765,7 +848,7 @@ class Game:
                                         # Rünü hücreye ata (aynı hücrede varsa üzerine yazar)
                                         b.runes[(cell_row, cell_col)] = self.held_rune
                                         self.consumables.remove(self.held_rune)
-                                        self.particle_system.create_text(mx, my, "RUNE APPLIED!", self.held_rune.color)
+                                        self.particle_system.create_text(mx, my, self.get_text('RUNE_APPLIED'), self.held_rune.color, font_path=self.font_name)
                                         self.audio.play('select')
                                         dropped_on_block = True
                                 
@@ -787,7 +870,7 @@ class Game:
                                     self.blocks.append(Block(new_shape))
                                     self.position_blocks_in_hand()
                                     self.combo_counter = 0
-                                    self.particle_system.create_text(mx, my, "REROLL!", (200, 200, 200))
+                                    self.particle_system.create_text(mx, my, self.get_text('REROLL'), (200, 200, 200), font_path=self.font_name)
                                 except: pass
                             else: self.audio.play('hit')
                             self.held_block.dragging = False
@@ -811,7 +894,7 @@ class Game:
                                     if t.key == 'gamblers_dice':
                                         triggered, bonus = TotemLogic.check_gambling(t.key, self)
                                         if triggered:
-                                            self.particle_system.create_text(mx, my, "GAMBLE WIN! x5", (255, 215, 0))
+                                            self.particle_system.create_text(mx, my, f"{self.get_text('GAMBLE_WIN')} x5", (255, 215, 0), font_path=self.font_name)
                                             self.score += int(bonus)
                                             self.combo_counter += 1
                                             self.audio.play('clear')
@@ -856,12 +939,12 @@ class Game:
                                     base_points += total_clears * SCORE_PER_LINE
                                     if col_bonus > 0:
                                         base_points += col_bonus
-                                        self.particle_system.create_text(mx, my - 50, f"COLOR MATCH! +{col_bonus}", (255, 215, 0))
+                                        self.particle_system.create_text(mx, my - 50, f"{self.get_text('COLOR_MATCH')} +{col_bonus}", (255, 215, 0), font_path=self.font_name)
                                     
                                     # Rün Bonusları
                                     base_points += rune_bonuses['chips']
                                     if rune_bonuses['chips'] > 0:
-                                        self.particle_system.create_text(mx, my-70, f"RUNE CHIPS! +{rune_bonuses['chips']}", (100, 200, 255))
+                                        self.particle_system.create_text(mx, my-70, f"{self.get_text('RUNE_CHIPS')} +{rune_bonuses['chips']}", (100, 200, 255), font_path=self.font_name)
 
                                     self.credits += total_clears
                                     self.credits += rune_bonuses['money']
@@ -886,15 +969,16 @@ class Game:
                                             extra_cash += gain
                                     if extra_cash > 0:
                                         self.credits += int(extra_cash)
-                                        self.particle_system.create_text(self.w-100, 100, f"+${extra_cash}", (100, 255, 100))
+                                        self.particle_system.create_text(self.w-100, 100, f"+${extra_cash}", (100, 255, 100), font_path=self.font_name)
                                     
                                     # Mult Hesapla (Rünler Dahil)
                                     mult = self.calculate_totem_mult()
                                     mult += rune_bonuses['mult_add']
                                     mult *= rune_bonuses['mult_x']
 
-                                    hype_word = random.choice(HYPE_WORDS)
-                                    self.particle_system.create_text(self.w//2, self.h//2 - 50, hype_word, (255, 215, 0))
+                                    hype_list = LANGUAGES.get(self.current_language, {}).get("HYPE_WORDS", ["WOW"])
+                                    hype_word = random.choice(hype_list)
+                                    self.particle_system.create_text(self.w//2, self.h//2 - 50, hype_word, (255, 215, 0), font_path=self.font_name)
                                     self.blocks.remove(self.held_block)
                                     self.held_block = None
                                     self.state = STATE_SCORING
@@ -906,7 +990,7 @@ class Game:
                                     for t in self.totems:
                                         if t.key == 'architect':
                                             arch_bonus += 50
-                                            self.particle_system.create_text(target_px, target_py, "+50 Arch", (100, 100, 255))
+                                            self.particle_system.create_text(target_px, target_py, f"+50 {self.get_text('ARCH_BONUS')}", (100, 100, 255), font_path=self.font_name)
                                     self.score += base_points + arch_bonus
                                     self.combo_counter = 0
                                     self.scoring_data = {'base': 0, 'mult': 0, 'total': 0}
@@ -987,6 +1071,18 @@ class Game:
                         self.set_fullscreen(new_value)
                         self.temp_settings['fullscreen'] = new_value
                         self.audio.play('select')
+
+                    # Language cycle
+                    elif 'language' in btns and btns['language'].collidepoint(mx, my):
+                        current = self.temp_settings.get('language', self.current_language)
+                        try:
+                            idx = AVAILABLE_LANGUAGES.index(current)
+                        except ValueError:
+                            idx = 0
+                        next_lang = AVAILABLE_LANGUAGES[(idx + 1) % len(AVAILABLE_LANGUAGES)]
+                        self.temp_settings['language'] = next_lang
+                        self.set_language(next_lang)
+                        self.audio.play('select')
                     
                     # Resolution arrows
                     elif 'res_left' in btns and btns['res_left'].collidepoint(mx, my):
@@ -1062,27 +1158,11 @@ class Game:
                 self.held_rune.x = mx
                 self.held_rune.y = my
             
-            # Step 1 progression: Advance when player presses R or E
-            if self.tutorial_step == 1 and self.tutorial_key_pressed:
-                self.tutorial_step = 2
-                self.tutorial_key_pressed = False
-            
-            # Step 4: Spawn demo items (Joker + Rune) - only once
-            # Also check step 5 to ensure rune persists if player advances
-            if self.tutorial_step in [4, 5] and len(self.consumables) == 0:
-                from runes import Rune
-                self.consumables.append(Rune('rune_fire'))
-                self.tutorial_rune_applied = False  # Reset for step 4
-                # Force position update
-                for r in self.consumables:
-                    r.x = SIDEBAR_WIDTH + 20
-                    r.y = 60
-                    r.rect = pygame.Rect(r.x, r.y, 40, 40)
-            
             # Step 5 progression: Advance when rune is applied
             if self.tutorial_step == 5 and self.tutorial_rune_applied:
                 self.tutorial_step = 6
                 self.tutorial_rune_applied = False
+                self.audio.play('select')
 
             # Clamp and deactivate overlay when finished, then start a real run
             if self.tutorial_step >= TOTAL_TUTORIAL_STEPS:

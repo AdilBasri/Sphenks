@@ -47,13 +47,20 @@ class Confetti:
             surface.blit(rotated, rect)
 
 class HypeText:
-    def __init__(self, x, y, text, color=(255, 255, 255)):
+    def __init__(self, x, y, text, color=(255, 255, 255), font_path=None):
         self.x = x
         self.y = y
         self.text = str(text)
         self.color = color
         # Daha büyük ve kalın font
-        self.font = pygame.font.SysFont(FONT_NAME, 50, bold=True)
+        try:
+            if font_path:
+                self.font = pygame.font.Font(font_path, 50)
+            else:
+                raise FileNotFoundError
+        except FileNotFoundError:
+            self.font = pygame.font.SysFont(FONT_NAME, 50, bold=True)
+        self.font.set_bold(True)
         self.life = 100
         self.scale = 0.1 # Küçük başla
         self.target_scale = 1.2 # Büyü (Pop)
@@ -139,8 +146,8 @@ class ParticleSystem:
         for _ in range(count):
             self.particles.append(Confetti(x, y))
     
-    def create_text(self, x, y, text, color=(255, 255, 255)):
-        self.texts.append(HypeText(x, y, text, color))
+    def create_text(self, x, y, text, color=(255, 255, 255), font_path=None):
+        self.texts.append(HypeText(x, y, text, color, font_path=font_path))
 
     def update(self):
         self.particles = [p for p in self.particles if p.life > 0]

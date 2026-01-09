@@ -1,6 +1,10 @@
 # settings.py
 import pygame
 
+# --- LANGUAGE SUPPORT ---
+AVAILABLE_LANGUAGES = ["EN", "TR", "DE", "ES", "ZH", "PT", "FR", "IT"]
+DEFAULT_LANGUAGE = "EN"
+
 # --- EKRAN AYARLARI ---
 # Native resolution for the game
 VIRTUAL_W = 850

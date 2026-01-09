@@ -34,6 +34,13 @@ class SaveManager:
                 for key in default:
                     if key not in data:
                         data[key] = default[key]
+                # Ensure nested settings keys exist
+                default_settings = default.get('settings', {})
+                data_settings = data.get('settings', {}) if isinstance(data.get('settings', {}), dict) else {}
+                for sk, sv in default_settings.items():
+                    if sk not in data_settings:
+                        data_settings[sk] = sv
+                data['settings'] = data_settings
                 return data
             except (json.JSONDecodeError, IOError):
                 # If file is corrupted, return defaults

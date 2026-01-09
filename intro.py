@@ -35,8 +35,14 @@ class IntroManager:
 
     def process_frame(self, frame):
         try:
+            # Get target screen dimensions
+            target_w, target_h = self.screen.get_size()
+            
             # Renk Dönüşümü BGR -> RGB
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            
+            # Resize using OpenCV (Much faster than Pygame scale)
+            frame = cv2.resize(frame, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
             
             # 1. ADIM: Standart Dönüşüm (Bu 'Tepetaklak' veriyor demiştin)
             frame = cv2.transpose(frame)
@@ -46,10 +52,7 @@ class IntroManager:
             surface = pygame.surfarray.make_surface(frame)
 
             # 2. ADIM: Tepetaklak görüntüyü 180 derece çevirip düzeltiyoruz
-            surface = pygame.transform.rotate(surface, 180)
-            
-            # Ölçekle
-            self.current_surface = pygame.transform.scale(surface, self.screen.get_size())
+            self.current_surface = pygame.transform.rotate(surface, 180)
         except Exception as e:
             print(f"Frame processing error: {e}")
 
