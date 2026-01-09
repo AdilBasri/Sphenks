@@ -83,7 +83,13 @@ LANGUAGES = {
                 "rune_earth": {"name": "EARTH RUNE", "desc": "Turns a block into solid stone."},
                 "refresh_shop": {"name": "REROLL", "desc": "Refresh all items in the bazaar."},
                 "unknown": {"name": "UNKNOWN", "desc": "A mysterious artifact."}
-            }
+            },
+            "BAZAAR": "BAZAAR",
+            "TOTEMS": "TOTEMS",
+            "RUNES": "RUNES",
+            "NEXT_ROUND": "NEXT ROUND >",
+            "LBL_ROTATE": "ROTATE",
+            "LBL_FLIP": "FLIP"
         }
     },
     "TR": {
@@ -168,7 +174,13 @@ LANGUAGES = {
                 "rune_earth": {"name": "TOPRAK RUNU", "desc": "Blogu kirilmaz tasa cevirir."},
                 "refresh_shop": {"name": "YENILE", "desc": "Pazardaki esyalari yeniler."},
                 "unknown": {"name": "BILINMEYEN", "desc": "Gizemli bir nesne."}
-            }
+            },
+            "BAZAAR": "PAZAR",
+            "TOTEMS": "TOTEMLER",
+            "RUNES": "RUNLER",
+            "NEXT_ROUND": "SONRAKI TUR >",
+            "LBL_ROTATE": "DONDUR",
+            "LBL_FLIP": "CEVIR"
         }
     },
     "DE": {
@@ -254,7 +266,13 @@ LANGUAGES = {
                 "rune_earth": {"name": "ERDRUNE", "desc": "Verwandelt einen Block in Stein."},
                 "refresh_shop": {"name": "ERNEUERUNG", "desc": "Aktualisiere alle Marktartikel."},
                 "unknown": {"name": "UNBEKANNT", "desc": "Ein rätselhaftes Artefakt."}
-            }
+            },
+            "BAZAAR": "BASAR",
+            "TOTEMS": "TOTEMS",
+            "RUNES": "RUNEN",
+            "NEXT_ROUND": "NÄCHSTE RUNDE >",
+            "LBL_ROTATE": "DREHEN",
+            "LBL_FLIP": "WENDEN"
         }
     },
     "ES": {
@@ -340,7 +358,13 @@ LANGUAGES = {
                 "rune_earth": {"name": "RUNA DE TIERRA", "desc": "Convierte en piedra."},
                 "refresh_shop": {"name": "RENOVAR", "desc": "Actualiza bazaar."},
                 "unknown": {"name": "DESCONOCIDO", "desc": "Artefacto misterioso."}
-            }
+            },
+            "BAZAAR": "MERCADO",
+            "TOTEMS": "TOTEMS",
+            "RUNES": "RUNAS",
+            "NEXT_ROUND": "SIGUIENTE >",
+            "LBL_ROTATE": "ROTAR",
+            "LBL_FLIP": "VOLTEAR"
         }
     },
     "ZH": {
@@ -426,7 +450,13 @@ LANGUAGES = {
                 "rune_earth": {"name": "土符文", "desc": "变为石块。"},
                 "refresh_shop": {"name": "刷新", "desc": "刷新市集。"},
                 "unknown": {"name": "未知", "desc": "神秘的神器。"}
-            }
+            },
+            "BAZAAR": "集市",
+            "TOTEMS": "图腾",
+            "RUNES": "符文",
+            "NEXT_ROUND": "下一轮 >",
+            "LBL_ROTATE": "旋转",
+            "LBL_FLIP": "翻转"
         }
     },
     "PT": {
@@ -512,7 +542,13 @@ LANGUAGES = {
                 "rune_earth": {"name": "Runa da Terra", "desc": "Transforma em bloco de pedra."},
                 "refresh_shop": {"name": "Atualizar", "desc": "Atualiza a loja."},
                 "unknown": {"name": "Desconhecido", "desc": "Artefato misterioso."}
-            }
+            },
+            "BAZAAR": "Mercado",
+            "TOTEMS": "Totens",
+            "RUNES": "Runas",
+            "NEXT_ROUND": "Próximo >",
+            "LBL_ROTATE": "GIRAR",
+            "LBL_FLIP": "VIRAR"
         }
     },
     "FR": {
@@ -598,7 +634,13 @@ LANGUAGES = {
                 "rune_earth": {"name": "Rune de Terre", "desc": "Convertir en bloc pierre."},
                 "refresh_shop": {"name": "Actualiser", "desc": "Actualise le bazar."},
                 "unknown": {"name": "Inconnu", "desc": "Artefact mystérieux."}
-            }
+            },
+            "BAZAAR": "Bazaar",
+            "TOTEMS": "Totems",
+            "RUNES": "Runes",
+            "NEXT_ROUND": "Prochaine >",
+            "LBL_ROTATE": "TOURNER",
+            "LBL_FLIP": "RETOURNER"
         }
     },
     "IT": {
@@ -684,7 +726,13 @@ LANGUAGES = {
                 "rune_earth": {"name": "Runa della Terra", "desc": "Converti in blocco di pietra."},
                 "refresh_shop": {"name": "Aggiorna", "desc": "Aggiorna il bazaar."},
                 "unknown": {"name": "Sconosciuto", "desc": "Artefatto misterioso."}
-            }
+            },
+            "BAZAAR": "Bazaar",
+            "TOTEMS": "Totems",
+            "RUNES": "Rune",
+            "NEXT_ROUND": "Prossimo >",
+            "LBL_ROTATE": "RUOTARE",
+            "LBL_FLIP": "CAPOVOLGERE"
         }
     }
 }

@@ -250,17 +250,17 @@ THEMES = {
 # --- VERİTABANLARI ---
 TOTEM_DATA = {
     'sniper': {'name': 'Sniper', 'price': 6, 'desc': 'Edge x2 Mult', 'trigger': 'on_score', 'rarity': 'Common'},
-    'miner': {'name': 'Miner', 'price': 8, 'desc': '+$1 per Stone', 'trigger': 'on_clear', 'rarity': 'Common'},
+    'miner': {'name': 'Miner', 'price': 4, 'desc': '+$1 per Stone', 'trigger': 'on_clear', 'rarity': 'Common'},
     'architect': {'name': 'Architect', 'price': 10, 'desc': '+50 Chips no clear', 'trigger': 'on_place', 'rarity': 'Rare'},
     'void_walker': {'name': 'Void Walker', 'price': 15, 'desc': 'x3 Mult if Void < 5', 'trigger': 'on_score', 'rarity': 'Rare'},
     'midas': {'name': 'King Midas', 'price': 25, 'desc': '+$0.5 per Block', 'trigger': 'on_clear', 'rarity': 'Legendary'},
     'recycler': {'name': 'Recycler', 'price': 12, 'desc': 'Free Discard', 'trigger': 'passive', 'rarity': 'Rare'},
-    'blood_pact': {'name': 'Blood Pact', 'price': 0, 'desc': 'x4 Mult / -1 Void', 'trigger': 'on_score', 'rarity': 'Legendary'},
+    'blood_pact': {'name': 'Blood Pact', 'price': 3, 'desc': 'x4 Mult / -1 Void', 'trigger': 'on_score', 'rarity': 'Legendary'},
     'savings_bond': {'name': 'Savings Bond', 'price': 10, 'desc': '+20% interest', 'trigger': 'on_round_end', 'rarity': 'Rare'},
-    'golden_ticket': {'name': 'Golden Ticket', 'price': 8, 'desc': '+$3 on GOLD block', 'trigger': 'on_place', 'rarity': 'Uncommon'},
+    'golden_ticket': {'name': 'Golden Ticket', 'price': 6, 'desc': '+$3 on GOLD block', 'trigger': 'on_place', 'rarity': 'Uncommon'},
     'gamblers_dice': {'name': "Gambler's Dice", 'price': 5, 'desc': '25% destroy/x5 score', 'trigger': 'on_place', 'rarity': 'Uncommon'},
-    'ruby_lens': {'name': 'Ruby Lens', 'price': 7, 'desc': '+2 Mult for RED', 'trigger': 'on_score', 'rarity': 'Common'},
-    'sapphire_lens': {'name': 'Sapphire Lens', 'price': 7, 'desc': '+2 Mult for BLUE', 'trigger': 'on_score', 'rarity': 'Common'},
+    'ruby_lens': {'name': 'Ruby Lens', 'price': 6, 'desc': '+2 Mult for RED', 'trigger': 'on_score', 'rarity': 'Common'},
+    'sapphire_lens': {'name': 'Sapphire Lens', 'price': 6, 'desc': '+2 Mult for BLUE', 'trigger': 'on_score', 'rarity': 'Common'},
     
     # --- OMEGA TOTEMLER (Yeni Dünya İçin) ---
     'dark_matter': {'name': 'Dark Matter', 'price': 40, 'desc': 'x10 Mult', 'trigger': 'on_score', 'rarity': 'Omega'},

@@ -283,6 +283,36 @@ class UIManager:
             lines.append(' '.join(current_line))
         return lines
 
+    def draw_mouse_icon(self, surface, x, y, highlight='right', size=12):
+        """
+        Draw a procedural mouse icon with optional button highlight.
+        highlight: 'right' for right button, 'middle' for middle/scroll wheel
+        """
+        # Mouse body (white outline)
+        body_rect = pygame.Rect(x, y, size, size + 4)
+        pygame.draw.ellipse(surface, (255, 255, 255), body_rect, 1)
+        
+        # Left button area
+        left_btn = pygame.Rect(x + 2, y + 2, size // 2 - 1, size // 2 + 1)
+        pygame.draw.rect(surface, (255, 255, 255), left_btn, 1)
+        
+        # Right button area
+        right_btn = pygame.Rect(x + size // 2 + 1, y + 2, size // 2 - 2, size // 2 + 1)
+        pygame.draw.rect(surface, (255, 255, 255), right_btn, 1)
+        
+        # Scroll wheel (small horizontal line in middle)
+        scroll_y = y + size // 2 + 2
+        pygame.draw.line(surface, (255, 255, 255), (x + 3, scroll_y), (x + size - 3, scroll_y), 1)
+        
+        # Highlight specified button or scroll
+        if highlight == 'right':
+            pygame.draw.rect(surface, (220, 70, 70), right_btn, 1)  # Red
+            pygame.draw.rect(surface, (220, 70, 70), right_btn)
+        elif highlight == 'middle':
+            # Highlight scroll wheel area
+            scroll_rect = pygame.Rect(x + 2, scroll_y - 1, size - 4, 2)
+            pygame.draw.rect(surface, (220, 70, 70), scroll_rect)  # Red
+
     def load_title_assets(self):
         """1.png - 7.png arası harfleri yükler, boyutlandırır ve TitleLetter objelerine dönüştürür"""
         self.title_letters = []
@@ -516,8 +546,31 @@ class UIManager:
         else:
             y_cursor += 40
 
-        goal_lbl = self.font_small.render(f"{self.t('QUOTA')}: {game.level_target}", True, gray)
-        surface.blit(goal_lbl, goal_lbl.get_rect(center=(cx, y_cursor)))
+        quota_lbl = self.font_small.render(self.t('QUOTA'), True, gray)
+        surface.blit(quota_lbl, quota_lbl.get_rect(center=(cx, y_cursor)))
+        y_cursor += 14
+        
+        # Control indicators with procedural mouse icons
+        control_x = 30
+        control_icon_y = y_cursor
+        
+        # [R] Rotate with mouse icon (right button highlighted)
+        self.draw_mouse_icon(surface, control_x, control_icon_y, highlight='right', size=10)
+        rotate_text = f"[R] {self.game.get_text('LBL_ROTATE')}"
+        rotate_txt = self.font_small.render(rotate_text, True, (255, 200, 50))
+        surface.blit(rotate_txt, (control_x + 18, control_icon_y - 1))
+        control_icon_y += 15
+        
+        # [E] Flip with mouse icon (middle/scroll highlighted)
+        self.draw_mouse_icon(surface, control_x, control_icon_y, highlight='middle', size=10)
+        flip_text = f"[E] {self.game.get_text('LBL_FLIP')}"
+        flip_txt = self.font_small.render(flip_text, True, (255, 200, 50))
+        surface.blit(flip_txt, (control_x + 18, control_icon_y - 1))
+        y_cursor += 32
+        
+        # Quota value
+        goal_val = self.font_bold.render(str(game.level_target), True, gold)
+        surface.blit(goal_val, goal_val.get_rect(center=(cx, y_cursor)))
         y_cursor += 14  # tighter spacing to lift score panel
 
         # Separator line
@@ -591,20 +644,6 @@ class UIManager:
         s.fill((10, 5, 15, 200)) 
         surface.blit(s, rect.topleft)
         pygame.draw.line(surface, ACCENT_COLOR, rect.topleft, rect.topright, 2)
-        
-        # Draw keyboard control hints
-        # NEW POSITION: Bottom left, above the MENU button in sidebar
-        hint_x = 25  # Aligned with menu button (20 + small offset)
-        menu_btn_y = VIRTUAL_H - 50  # Menu button Y position
-        hint_y = menu_btn_y - 50  # Start 50px above menu button
-        
-        # [R] Rotate
-        rotate_hint = self.font_small.render("[R] Rotate", True, (255, 200, 50))  # Gold color
-        surface.blit(rotate_hint, (hint_x, hint_y))
-        
-        # [E] Flip (stacked below)
-        flip_hint = self.font_small.render("[E] Flip", True, (255, 200, 50))  # Gold color
-        surface.blit(flip_hint, (hint_x, hint_y + 18))
 
     def render_wrapped_text(self, surface, text, font, color, x, y, max_width, line_spacing=15):
         words = text.split(' ')
@@ -725,10 +764,12 @@ class UIManager:
             # Tooltip verisini sakla - çizim döngüsünün sonunda render edilecek
             if rect.collidepoint(mx, my):
                 img = self.totem_images.get(t.key, None)
+                # Get localized item info
+                item_info = game.get_item_info(t.key)
                 self.pending_tooltip = {
                     'type': 'totem',
-                    'title': t.name,
-                    'desc': t.desc,
+                    'title': item_info['name'],
+                    'desc': item_info['desc'],
                     'mx': mx,
                     'my': my,
                     'image': img
@@ -1275,9 +1316,10 @@ class UIManager:
             surface.blit(name_txt, name_rect)
             content_y += 18
             
-            # 3. Kısa Açıklama (1-2 satır)
+            # 3. Kısa Açıklama (1-2 satır) - Localized from get_item_info
             desc_font = self._make_font(10)
-            desc_short = totem.desc[:20] + ".." if len(totem.desc) > 22 else totem.desc
+            localized_desc = item_info['desc']
+            desc_short = localized_desc[:20] + ".." if len(localized_desc) > 22 else localized_desc
             desc_txt = desc_font.render(desc_short, True, (180, 180, 180))
             desc_rect = desc_txt.get_rect(centerx=card_rect.centerx, top=content_y)
             surface.blit(desc_txt, desc_rect)
@@ -1292,13 +1334,13 @@ class UIManager:
             
             totem.rect = card_rect
             
-            # Hover durumunda tooltip verisi sakla
+            # Hover durumunda tooltip verisi sakla - Use localized info
             if is_hovered:
                 img = self.totem_images.get(totem.key, None)
                 self.shop_tooltip = {
                     'type': 'totem',
-                    'title': totem.name,
-                    'desc': totem.desc,
+                    'title': item_info['name'],
+                    'desc': item_info['desc'],
                     'mx': mx,
                     'my': my,
                     'image': img
@@ -1340,8 +1382,10 @@ class UIManager:
                 icon_txt = icon_font.render(rune.icon, True, rune.color)
                 surface.blit(icon_txt, icon_txt.get_rect(center=(rune_rect.centerx, circle_y)))
                 
-                # Rün ismi
-                name_txt = self.font_small.render(rune.name[:10], True, (255, 255, 255))
+                # Rün ismi - Localized via get_item_info
+                rune_info = self.game.get_item_info(rune.key)
+                rune_name_display = rune_info['name'][:10]
+                name_txt = self.font_small.render(rune_name_display, True, (255, 255, 255))
                 surface.blit(name_txt, name_txt.get_rect(centerx=rune_rect.centerx, top=rune_rect.y + 65))
                 
                 # Fiyat
@@ -1354,12 +1398,12 @@ class UIManager:
                 
                 rune.rect = rune_rect
                 
-                # Hover durumunda tooltip verisi sakla
+                # Hover durumunda tooltip verisi sakla - Use localized info
                 if is_hovered:
                     self.shop_tooltip = {
                         'type': 'rune',
-                        'title': rune.name,
-                        'desc': rune.desc,
+                        'title': rune_info['name'],
+                        'desc': rune_info['desc'],
                         'mx': mx,
                         'my': my,
                         'color': rune.color,
@@ -1376,13 +1420,13 @@ class UIManager:
                 self.draw_dynamic_tooltip(surface, tt['title'], tt['desc'], tt['mx'], tt['my'],
                                          title_color=tt.get('color', ACCENT_COLOR))
         
-        # Next Round butonu
+        # Next Round butonu - Localized
         nxt_rect = pygame.Rect(VIRTUAL_W - 160, VIRTUAL_H - 50, 140, 35)
         nxt_hovered = nxt_rect.collidepoint(mx, my)
         nxt_col = (60, 80, 60) if nxt_hovered else (40, 60, 40)
         pygame.draw.rect(surface, nxt_col, nxt_rect, border_radius=8)
         pygame.draw.rect(surface, (100, 200, 100), nxt_rect, 2, border_radius=8)
-        nxt = self.font_bold.render(self.t('NEXT ROUND >'), True, (255,255,255))
+        nxt = self.font_bold.render(self.game.get_text('NEXT_ROUND'), True, (255,255,255))
         surface.blit(nxt, nxt.get_rect(center=nxt_rect.center))
 
     def draw_game_over(self, surface, score):
@@ -1939,10 +1983,12 @@ class UIManager:
         mx, my = pygame.mouse.get_pos()
         for r in game.consumables:
             if r.rect and r.rect.collidepoint(mx, my) and not r.dragging:
+                # Get localized item info
+                item_info = game.get_item_info(r.key)
                 return {
                     'type': 'rune',
-                    'title': r.name,
-                    'desc': r.desc,
+                    'title': item_info['name'],
+                    'desc': item_info['desc'],
                     'mx': mx,
                     'my': my,
                     'color': r.color
