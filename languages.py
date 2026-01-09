@@ -1,9 +1,33 @@
 # languages.py
+import os
+import sys
+
+# --- BU FONKSİYON EN ÜSTTE OLMALI ---
+def resource_path(relative_path):
+    """ Dosyanın nerede olduğunu akıllıca bulur """
+    # 1. Önce PyInstaller'ın içindeki (_internal) klasöre bak
+    if hasattr(sys, '_MEIPASS'):
+        path_in_meipass = os.path.join(sys._MEIPASS, relative_path)
+        if os.path.exists(path_in_meipass):
+            return path_in_meipass
+
+    # 2. Orada yoksa EXE'nin yanındaki klasöre bak
+    try:
+        base_path = os.path.dirname(sys.executable)
+    except:
+        base_path = os.path.abspath(".")
+    
+    path_next_to_exe = os.path.join(base_path, relative_path)
+    if os.path.exists(path_next_to_exe):
+        return path_next_to_exe
+        
+    # 3. Hiçbiri değilse geliştirme ortamıdır
+    return os.path.join(os.path.abspath("."), relative_path)
 
 LANGUAGES = {
     "EN": {
         "name": "ENGLISH",
-        "font": "assets/fonts/Alagard.ttf",
+        "font": resource_path("assets/fonts/Alagard.ttf"),
         "size_offset": 0,
         "direction": "LTR",
         "HYPE_WORDS": ["AMAZING!", "LEGEND!", "INSANE!", "GODLIKE!", "PERFECT!"],
@@ -94,7 +118,7 @@ LANGUAGES = {
     },
     "TR": {
         "name": "TURKCE",
-        "font": "assets/fonts/Alagard.ttf",
+        "font": resource_path("assets/fonts/Alagard.ttf"),
         "size_offset": 0,
         "direction": "LTR",
         "HYPE_WORDS": ["EFSANE!", "HARIKA!", "INANILMAZ!", "SOV YAPTIN!", "MUKEMMEL!"],
@@ -185,7 +209,7 @@ LANGUAGES = {
     },
     "DE": {
         "name": "DEUTSCH",
-        "font": "assets/fonts/Alagard.ttf",
+        "font": resource_path("assets/fonts/Alagard.ttf"),
         "size_offset": 0,
         "direction": "LTR",
         "HYPE_WORDS": ["WUNDERBAR!", "LEGENDE!", "WAHNSINN!", "PERFEKT!", "MEISTER!"],
@@ -277,7 +301,7 @@ LANGUAGES = {
     },
     "ES": {
         "name": "ESPANOL",
-        "font": "assets/fonts/Alagard.ttf",
+        "font": resource_path("assets/fonts/Alagard.ttf"),
         "size_offset": 0,
         "direction": "LTR",
         "HYPE_WORDS": ["INCREIBLE!", "LEYENDA!", "LOCO!", "PERFECTO!", "MAESTRO!"],
@@ -369,7 +393,7 @@ LANGUAGES = {
     },
     "ZH": {
         "name": "CHINESE",
-        "font": "assets/fonts/Zpix.ttf",
+        "font": resource_path("assets/fonts/Zpix.ttf"),
         "size_offset": 2,
         "direction": "LTR",
         "HYPE_WORDS": ["太棒了!", "传说!", "疯狂!", "超神!", "完美!"],
@@ -461,7 +485,7 @@ LANGUAGES = {
     },
     "PT": {
         "name": "PORTUGUES",
-        "font": "assets/fonts/Alagard.ttf",
+        "font": resource_path("assets/fonts/Alagard.ttf"),
         "size_offset": 0,
         "direction": "LTR",
         "HYPE_WORDS": ["INCRIVEL!", "LENDA!", "INSANO!", "DIVINO!", "PERFEITO!"],
@@ -553,7 +577,7 @@ LANGUAGES = {
     },
     "FR": {
         "name": "FRANCAIS",
-        "font": "assets/fonts/Alagard.ttf",
+        "font": resource_path("assets/fonts/Alagard.ttf"),
         "size_offset": 0,
         "direction": "LTR",
         "HYPE_WORDS": ["INCROYABLE!", "LEGENDE!", "DEMENT!", "DIVIN!", "PARFAIT!"],
@@ -645,7 +669,7 @@ LANGUAGES = {
     },
     "IT": {
         "name": "ITALIANO",
-        "font": "assets/fonts/Alagard.ttf",
+        "font": resource_path("assets/fonts/Alagard.ttf"),
         "size_offset": 0,
         "direction": "LTR",
         "HYPE_WORDS": ["INCREDIBILE!", "LEGGENDA!", "PAZZESCO!", "DIVINO!", "PERFETTO!"],

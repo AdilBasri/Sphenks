@@ -18,6 +18,27 @@ from audio import AudioManager
 from crt import CRTManager
 from save_data import SaveManager 
 
+def resource_path(relative_path):
+    """ Dosyanın nerede olduğunu akıllıca bulur """
+    # 1. Önce PyInstaller'ın içindeki (_internal) klasöre bak
+    if hasattr(sys, '_MEIPASS'):
+        path_in_meipass = os.path.join(sys._MEIPASS, relative_path)
+        if os.path.exists(path_in_meipass):
+            return path_in_meipass
+
+    # 2. Orada yoksa EXE'nin yanındaki klasöre bak
+    try:
+        base_path = os.path.dirname(sys.executable)
+    except:
+        base_path = os.path.abspath(".")
+    
+    path_next_to_exe = os.path.join(base_path, relative_path)
+    if os.path.exists(path_next_to_exe):
+        return path_next_to_exe
+        
+    # 3. Hiçbiri değilse geliştirme ortamıdır
+    return os.path.join(os.path.abspath("."), relative_path)
+
 class Game:
     def __init__(self):
         # Center window on screen
@@ -84,9 +105,9 @@ class Game:
         self.crt = CRTManager()
         
         # Initialize intro video manager (after screen creation)
-        self.intro_manager = intro.IntroManager(self.screen, "assets/sphenks_video.mp4")
+        self.intro_manager = intro.IntroManager(self.screen, resource_path("assets/sphenks_video.mp4"))
         # Play intro audio immediately
-        pygame.mixer.music.load("assets/intro_audio.mp3")
+        pygame.mixer.music.load(resource_path("assets/intro_audio.mp3"))
         pygame.mixer.music.play()
         self.particle_system = ParticleSystem()
         
@@ -651,7 +672,7 @@ class Game:
                         self.intro_manager.close()
                         self.state = STATE_MENU
                         # Start background music
-                        pygame.mixer.music.load("assets/music.mp3")
+                        pygame.mixer.music.load(resource_path("assets/music.mp3"))
                         pygame.mixer.music.play(-1)
                         self.audio.play('select')
 
@@ -1195,7 +1216,7 @@ class Game:
             if not playing:
                 self.intro_manager.close()
                 self.state = STATE_MENU
-                pygame.mixer.music.load("assets/music.mp3")
+                pygame.mixer.music.load(resource_path("assets/music.mp3"))
                 pygame.mixer.music.play(-1)
 
             return

@@ -1,5 +1,29 @@
 # settings.py
 import pygame
+import os
+import sys
+
+# --- BU FONKSİYON EN ÜSTTE ---
+def resource_path(relative_path):
+    """ Dosyanın nerede olduğunu akıllıca bulur """
+    # 1. Önce PyInstaller'ın içindeki (_internal) klasöre bak
+    if hasattr(sys, '_MEIPASS'):
+        path_in_meipass = os.path.join(sys._MEIPASS, relative_path)
+        if os.path.exists(path_in_meipass):
+            return path_in_meipass
+
+    # 2. Orada yoksa EXE'nin yanındaki klasöre bak
+    try:
+        base_path = os.path.dirname(sys.executable)
+    except:
+        base_path = os.path.abspath(".")
+    
+    path_next_to_exe = os.path.join(base_path, relative_path)
+    if os.path.exists(path_next_to_exe):
+        return path_next_to_exe
+        
+    # 3. Hiçbiri değilse geliştirme ortamıdır
+    return os.path.join(os.path.abspath("."), relative_path)
 
 # --- LANGUAGE SUPPORT ---
 AVAILABLE_LANGUAGES = ["EN", "TR", "DE", "ES", "ZH", "PT", "FR", "IT"]
@@ -100,12 +124,12 @@ NEW_WORLD_ANTE = 9  # Bu Ante'ye geçince oyun değişir
 
 # --- SES ---
 SFX_VOLUME = 0.4
-SND_PLACE = 'sounds/place.wav'
-SND_CLEAR = 'sounds/clear.wav'
-SND_EXPLODE = 'sounds/explosion.wav'
-SND_GAMEOVER = 'sounds/gameover.wav'
-SND_SELECT = 'sounds/select.wav'
-SND_HIT = 'sounds/hit.wav'
+SND_PLACE = resource_path('sounds/place.wav')
+SND_CLEAR = resource_path('sounds/clear.wav')
+SND_EXPLODE = resource_path('sounds/explosion.wav')
+SND_GAMEOVER = resource_path('sounds/gameover.wav')
+SND_SELECT = resource_path('sounds/select.wav')
+SND_HIT = resource_path('sounds/hit.wav')
 
 # --- STATES ---
 STATE_INTRO = 'intro'
