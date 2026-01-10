@@ -1760,7 +1760,7 @@ class UIManager:
         
         # Panel
         panel_w = 500
-        panel_h = 350
+        panel_h = 400
         panel_x = cx - panel_w // 2
         panel_y = 100
         
@@ -1906,10 +1906,11 @@ class UIManager:
         self.settings_buttons['res_right'] = right_rect
         
         # --- SAVE & BACK BUTTON ---
+        # Position dynamically: 50 pixels below the Resolution selector row
         btn_w = 180
         btn_h = 50
         btn_x = cx - btn_w // 2
-        btn_y = panel_y + panel_h - 70
+        btn_y = y_offset + 50
         
         save_btn = pygame.Rect(btn_x, btn_y, btn_w, btn_h)
         self.settings_buttons['save'] = save_btn
