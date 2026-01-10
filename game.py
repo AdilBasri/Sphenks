@@ -1232,6 +1232,17 @@ class Game:
                 self.held_rune.x = mx
                 self.held_rune.y = my
             
+            # Fix for tutorial_step 2 (discard teaching): Prevent softlock when hand is empty
+            if self.tutorial_step == 2 and len(self.blocks) == 0:
+                # Create 3 new blocks to allow player to practice discarding
+                for _ in range(3):
+                    try:
+                        new_shape = self.get_smart_block_key()
+                    except Exception:
+                        new_shape = random.choice(['I', 'DOT', 'L'])
+                    self.blocks.append(Block(new_shape))
+                self.position_blocks_in_hand()
+            
             # Step 5 progression: Advance when rune is applied
             if self.tutorial_step == 5 and self.tutorial_rune_applied:
                 self.tutorial_step = 6
