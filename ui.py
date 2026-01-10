@@ -550,8 +550,8 @@ class UIManager:
         surface.blit(quota_lbl, quota_lbl.get_rect(center=(cx, y_cursor)))
         y_cursor += 14
         
-        # Control indicators with procedural mouse icons
-        control_x = 30
+        # Control indicators with procedural mouse icons (LEFT ALIGNED)
+        control_x = 15  # Left edge padding
         control_icon_y = y_cursor
         
         # [R] Rotate with mouse icon (right button highlighted)
@@ -566,19 +566,19 @@ class UIManager:
         flip_text = f"[E] {self.game.get_text('LBL_FLIP')}"
         flip_txt = self.font_small.render(flip_text, True, (255, 200, 50))
         surface.blit(flip_txt, (control_x + 18, control_icon_y - 1))
-        y_cursor += 32
         
-        # Quota value
+        # Quota value (CENTERED, pushed down to avoid control hints)
+        y_cursor += 32  # Push down to clear control hints
         goal_val = self.font_bold.render(str(game.level_target), True, gold)
         surface.blit(goal_val, goal_val.get_rect(center=(cx, y_cursor)))
-        y_cursor += 14  # tighter spacing to lift score panel
+        y_cursor += 20  # Padding after quota value
 
         # Separator line
         pygame.draw.line(surface, (100, 90, 110), (8, y_cursor + 8), (SIDEBAR_WIDTH - 8, y_cursor + 8), 3)
 
-        # Stone tablet scoring panel (fixed higher start to avoid menu overlap)
-        y_cursor = 190
-        tablet_rect = pygame.Rect(10, y_cursor, SIDEBAR_WIDTH - 20, 190)
+        # Stone tablet scoring panel (dynamic Y position with 15px gap)
+        y_cursor += 15  # 15px gap below separator
+        tablet_rect = pygame.Rect(10, y_cursor, SIDEBAR_WIDTH - 20, 145)
         pygame.draw.rect(surface, (40, 34, 48), tablet_rect, border_radius=12)
         pygame.draw.rect(surface, (100, 90, 110), tablet_rect, 3, border_radius=12)
         inner_rect = tablet_rect.inflate(-12, -12)
@@ -619,17 +619,31 @@ class UIManager:
         total_txt = self.font_big.render(str(hand_total), True, TOTAL_COLOR)
         surface.blit(total_txt, total_txt.get_rect(center=(mid_x + shake, total_y + 24 + shake)))
 
-        y_cursor = tablet_rect.bottom + 12
-
+        # Menu button (define first to calculate available gap)
+        menu_btn = pygame.Rect(20, VIRTUAL_H - 45, SIDEBAR_WIDTH - 40, 35)
+        
+        # Calculate available gap between tablet and menu button
+        gap_height = menu_btn.top - tablet_rect.bottom
+        
+        # Calculate height of 'Shift Score' content
+        label_height = self.font_reg.get_height()
+        value_height = self.font_score.get_height()
+        content_spacing = 10  # Compact spacing between label and value
+        total_content_height = label_height + content_spacing + value_height
+        
+        # Center the content in the available gap
+        start_y = tablet_rect.bottom + (gap_height - total_content_height) // 2
+        
+        # Draw 'Shift Score' label
         lbl_round_score = self.font_reg.render(self.t('SHIFT_SCORE'), True, gray)
-        surface.blit(lbl_round_score, lbl_round_score.get_rect(center=(cx, y_cursor)))
-        y_cursor += 20
+        surface.blit(lbl_round_score, lbl_round_score.get_rect(center=(cx, start_y)))
+        
+        # Draw current score value
         sc_col = (255, 255, 255) if game.score < game.level_target else (100, 255, 100)
         curr_score_txt = self.font_score.render(str(game.score), True, sc_col)
-        surface.blit(curr_score_txt, curr_score_txt.get_rect(center=(cx, y_cursor)))
+        surface.blit(curr_score_txt, curr_score_txt.get_rect(center=(cx, start_y + label_height + content_spacing)))
 
-        # Menu button
-        menu_btn = pygame.Rect(20, VIRTUAL_H - 50, SIDEBAR_WIDTH - 40, 35)
+        # Draw menu button
         col = (70, 60, 80)
         if menu_btn.collidepoint(pygame.mouse.get_pos()): col = (90, 80, 100)
         pygame.draw.rect(surface, col, menu_btn, border_radius=8)
