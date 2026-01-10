@@ -764,9 +764,6 @@ class Game:
                                 self.flip_held_block()
 
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    if self.input_cooldown > 0:
-                        # Ignore game interactions during cooldown, but do not discard event
-                        continue
                     rune_clicked = False
                     block_clicked = False
 
@@ -836,8 +833,11 @@ class Game:
                     if self.held_block:
                         if self.tutorial_step == 2 and self.trash_rect.collidepoint(mx, my):
                             # Tutorial discard: recycle hand immediately and advance
-                            if self.held_block in self.blocks:
-                                self.blocks.remove(self.held_block)
+                            # Strict order to prevent visual glitches:
+                            self.held_block.dragging = False
+                            self.held_block = None
+                            self.blocks.clear()
+                            
                             # Top the hand back up for the next step
                             tutorial_shapes = ['I', 'DOT', 'L']
                             while len(self.blocks) < 3:
@@ -846,10 +846,10 @@ class Game:
                                 except Exception:
                                     new_shape = random.choice(tutorial_shapes)
                                 self.blocks.append(Block(new_shape))
+                            
                             self.position_blocks_in_hand()
                             self.audio.play('select')
                             self.tutorial_step = 3
-                            self.held_block = None
                             return
                         else:
                             cur_x = mx - self.held_block.offset_x
@@ -881,8 +881,6 @@ class Game:
                     if hasattr(self, 'menu_btn_rect') and self.menu_btn_rect.collidepoint(mx, my) and self.input_cooldown == 0:
                         self.state = STATE_PAUSE
                     if event.button == 1: 
-                        if self.input_cooldown > 0:
-                            continue
                         # --- 1. Rünleri Kontrol Et (Sürükleme) ---
                         rune_clicked = False
                         for r in self.consumables:
