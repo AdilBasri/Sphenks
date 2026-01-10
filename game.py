@@ -1352,6 +1352,25 @@ class Game:
             self.ui.draw_hud_elements(self.screen, self)
             
             # Layer 4: Hand blocks and runes (ON TOP of UI backgrounds)
+            # Draw Idle Runes
+            start_x = SIDEBAR_WIDTH + 20
+            start_y = 60
+            for i, r in enumerate(self.consumables):
+                if not r.dragging:
+                    r.x = start_x + i * 50
+                    r.y = start_y
+                    r.rect = pygame.Rect(r.x, r.y, 40, 40)
+                    
+                    # Draw circle background
+                    pygame.draw.circle(self.screen, (20, 20, 30), (r.x + 20, r.y + 20), 20)
+                    # Draw colored border
+                    pygame.draw.circle(self.screen, r.color, (r.x + 20, r.y + 20), 18)
+                    # Draw icon text
+                    font = pygame.font.SysFont("Arial", 20, bold=True)
+                    txt = font.render(r.icon, True, (255, 255, 255))
+                    self.screen.blit(txt, txt.get_rect(center=(r.x + 20, r.y + 20)))
+            
+            # Draw Hand Blocks
             for b in self.blocks:
                 if b != self.held_block:
                     b.draw(self.screen, 0, 0, 0.8, 255, theme['style'])
