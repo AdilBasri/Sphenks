@@ -5,7 +5,7 @@ import random
 import math
 import os
 from settings import *
-from settings import USE_FULLSCREEN, WINDOW_W, WINDOW_H, STATE_DEBT, COLLECTIBLES, STATE_COLLECTION, STATE_SETTINGS, STATE_TRAINING, RESOLUTIONS, STATE_INTRO, STATE_DEMO_END
+from settings import USE_FULLSCREEN, WINDOW_W, WINDOW_H, STATE_DEBT, COLLECTIBLES, STATE_COLLECTION, STATE_SETTINGS, STATE_TRAINING, RESOLUTIONS, STATE_INTRO, STATE_DEMO_END, STATE_COMING_SOON
 from languages import LANGUAGES
 from grid import Grid
 import intro
@@ -707,6 +707,13 @@ class Game:
                                 self.input_cooldown = 10
                                 self.audio.play('select')
                         
+                        # Check coming soon button
+                        if hasattr(self.ui, 'coming_soon_btn_rect'):
+                            if self.ui.coming_soon_btn_rect.collidepoint(mx, my) and self.input_cooldown == 0:
+                                self.audio.play('select')
+                                self.state = STATE_COMING_SOON
+                                self.input_cooldown = 10
+                        
                         # Then check menu buttons
                         if hasattr(self.ui, 'menu_buttons'):
                             for rect, text in self.ui.menu_buttons:
@@ -748,6 +755,14 @@ class Game:
                             self.input_cooldown = 15  # Prevent ghost click on PLAY button
                         elif no.collidepoint(mx, my) and self.input_cooldown == 0:
                             self.state = STATE_PLAYING
+            
+            elif self.state == STATE_COMING_SOON:
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if hasattr(self.ui, 'coming_soon_back_btn'):
+                        if self.ui.coming_soon_back_btn.collidepoint(mx, my) and self.input_cooldown == 0:
+                            self.audio.play('select')
+                            self.state = STATE_MENU
+                            self.input_cooldown = 10
             
             elif self.state == STATE_TRAINING:
                 # --- Generic input handling first to avoid softlocks ---
@@ -1330,6 +1345,8 @@ class Game:
             # Draw reset confirmation overlay if active
             if self.show_reset_confirm:
                 self.ui.draw_reset_confirm_overlay(self.screen)
+        elif self.state == STATE_COMING_SOON:
+            self.ui.draw_coming_soon(self.screen)
         elif self.state == STATE_TRAINING:
             # Draw training mode (game board + tutorial overlay)
             boss_shake_x, boss_shake_y = self.particle_system.atmosphere.get_shake_offset()

@@ -901,6 +901,21 @@ class UIManager:
         
         reset_text = self.font_bold.render(self.game.get_text("RESET_BTN"), True, (255, 200, 200))
         surface.blit(reset_text, reset_text.get_rect(center=self.reset_btn_rect.center))
+        
+        # Coming Soon Button (below Reset Button, top-left)
+        coming_soon_btn_w, coming_soon_btn_h = 120, 40
+        coming_soon_btn_x, coming_soon_btn_y = 20, 70
+        self.coming_soon_btn_rect = pygame.Rect(coming_soon_btn_x, coming_soon_btn_y, coming_soon_btn_w, coming_soon_btn_h)
+        
+        is_coming_soon_hovered = self.coming_soon_btn_rect.collidepoint(mx, my)
+        coming_soon_btn_fill = (220, 180, 70) if is_coming_soon_hovered else (200, 160, 50)
+        coming_soon_btn_border = (255, 220, 100) if is_coming_soon_hovered else (200, 180, 80)
+        
+        pygame.draw.rect(surface, coming_soon_btn_fill, self.coming_soon_btn_rect, border_radius=8)
+        pygame.draw.rect(surface, coming_soon_btn_border, self.coming_soon_btn_rect, 2, border_radius=8)
+        
+        coming_soon_text = self.font_bold.render(self.game.get_text("BTN_COMING_SOON"), True, (50, 40, 20))
+        surface.blit(coming_soon_text, coming_soon_text.get_rect(center=self.coming_soon_btn_rect.center))
 
     def draw_round_select(self, surface, game):
         overlay = pygame.Surface((VIRTUAL_W, VIRTUAL_H), pygame.SRCALPHA)
@@ -1050,6 +1065,54 @@ class UIManager:
         
         # Store button rects for event handling
         self.reset_confirm_buttons = {'YES': yes_btn, 'NO': no_btn}
+
+    def draw_coming_soon(self, surface):
+        """Coming Soon feature showcase"""
+        # Dark overlay
+        overlay = pygame.Surface((VIRTUAL_W, VIRTUAL_H), pygame.SRCALPHA)
+        overlay.fill((10, 10, 15, 250))
+        surface.blit(overlay, (0, 0))
+        
+        cx = VIRTUAL_W // 2
+        
+        # Title
+        title_text = self.game.get_text('COMING_SOON_TITLE')
+        title = self.title_font.render(title_text, True, (255, 215, 0))
+        surface.blit(title, title.get_rect(center=(cx, 60)))
+        
+        # Features list
+        features = [
+            self.game.get_text('CS_PYRO'),
+            self.game.get_text('CS_LANGS'),
+            self.game.get_text('CS_STORY'),
+            self.game.get_text('CS_VISUALS'),
+            self.game.get_text('CS_MORE'),
+        ]
+        
+        feature_y = 160
+        feature_gap = 50
+        
+        for feature in features:
+            feature_text = self.font_score.render(feature, True, (200, 200, 200))
+            surface.blit(feature_text, feature_text.get_rect(center=(cx, feature_y)))
+            feature_y += feature_gap
+        
+        # Back button
+        back_btn_w, back_btn_h = 120, 40
+        back_btn_x = cx - (back_btn_w // 2)
+        back_btn_y = VIRTUAL_H - 80
+        self.coming_soon_back_btn = pygame.Rect(back_btn_x, back_btn_y, back_btn_w, back_btn_h)
+        
+        mx, my = pygame.mouse.get_pos()
+        is_hovered = self.coming_soon_back_btn.collidepoint(mx, my)
+        btn_color = (80, 80, 100) if is_hovered else (60, 60, 80)
+        border_color = (150, 150, 150) if is_hovered else (100, 100, 100)
+        
+        pygame.draw.rect(surface, btn_color, self.coming_soon_back_btn, border_radius=8)
+        pygame.draw.rect(surface, border_color, self.coming_soon_back_btn, 2, border_radius=8)
+        
+        back_text = self.font_bold.render(self.game.get_text('BACK'), True, (255, 255, 255))
+        surface.blit(back_text, back_text.get_rect(center=self.coming_soon_back_btn.center))
 
     def draw_training_overlay(self, surface, game, step):
         """Interactive tutorial overlay mapped to localized tutorial steps"""

@@ -113,7 +113,15 @@ LANGUAGES = {
             "RUNES": "RUNES",
             "NEXT_ROUND": "NEXT ROUND >",
             "LBL_ROTATE": "ROTATE",
-            "LBL_FLIP": "FLIP"
+            "LBL_FLIP": "FLIP",
+            "BTN_COMING_SOON": "COMING SOON",
+            "COMING_SOON_TITLE": "COMING SOON v1.0",
+            "CS_PYRO": "New Pyro Mode 🔥",
+            "CS_LANGS": "Russian & Arabic Support 🌍",
+            "CS_STORY": "Full Story: 4 Worlds 📜",
+            "CS_VISUALS": "New VFX & Backgrounds ✨",
+            "CS_MORE": "And much more! 🚀",
+            "BACK": "BACK"
         }
     },
     "TR": {
@@ -204,7 +212,15 @@ LANGUAGES = {
             "RUNES": "RUNLER",
             "NEXT_ROUND": "SONRAKI TUR >",
             "LBL_ROTATE": "DONDUR",
-            "LBL_FLIP": "CEVIR"
+            "LBL_FLIP": "CEVIR",
+            "BTN_COMING_SOON": "PEK YAKINDA",
+            "COMING_SOON_TITLE": "TAM SÜRÜMDE GELECEKLER",
+            "CS_PYRO": "Yeni Pyro Modu 🔥",
+            "CS_LANGS": "Rusça ve Arapça Desteği 🌍",
+            "CS_STORY": "Tam Hikaye: 4 Farklı Dünya 📜",
+            "CS_VISUALS": "Gelişmiş Efektler ve Arkaplanlar ✨",
+            "CS_MORE": "Ve çok daha fazlası! 🚀",
+            "BACK": "GERI"
         }
     },
     "DE": {
@@ -296,7 +312,15 @@ LANGUAGES = {
             "RUNES": "RUNEN",
             "NEXT_ROUND": "NÄCHSTE RUNDE >",
             "LBL_ROTATE": "DREHEN",
-            "LBL_FLIP": "WENDEN"
+            "LBL_FLIP": "WENDEN",
+            "BTN_COMING_SOON": "DEMNÄCHST",
+            "COMING_SOON_TITLE": "DEMNÄCHST v1.0",
+            "CS_PYRO": "Neuer Pyro-Modus 🔥",
+            "CS_LANGS": "Russisch & Arabisch Support 🌍",
+            "CS_STORY": "Volle Story: 4 Welten 📜",
+            "CS_VISUALS": "Neue VFX & Hintergründe ✨",
+            "CS_MORE": "Und vieles mehr! 🚀",
+            "BACK": "ZURÜCK"
         }
     },
     "ES": {
@@ -388,7 +412,15 @@ LANGUAGES = {
             "RUNES": "RUNAS",
             "NEXT_ROUND": "SIGUIENTE >",
             "LBL_ROTATE": "ROTAR",
-            "LBL_FLIP": "VOLTEAR"
+            "LBL_FLIP": "VOLTEAR",
+            "BTN_COMING_SOON": "PRÓXIMAMENTE",
+            "COMING_SOON_TITLE": "PRÓXIMAMENTE v1.0",
+            "CS_PYRO": "Nuevo Modo Pyro 🔥",
+            "CS_LANGS": "Soporte Ruso y Árabe 🌍",
+            "CS_STORY": "Historia Completa: 4 Mundos 📜",
+            "CS_VISUALS": "Nuevos VFX y Fondos ✨",
+            "CS_MORE": "¡Y mucho más! 🚀",
+            "BACK": "ATRÁS"
         }
     },
     "ZH": {
@@ -480,7 +512,15 @@ LANGUAGES = {
             "RUNES": "符文",
             "NEXT_ROUND": "下一轮 >",
             "LBL_ROTATE": "旋转",
-            "LBL_FLIP": "翻转"
+            "LBL_FLIP": "翻转",
+            "BTN_COMING_SOON": "即将推出",
+            "COMING_SOON_TITLE": "即将推出 v1.0",
+            "CS_PYRO": "新火焰模式 🔥",
+            "CS_LANGS": "俄语和阿拉伯语支持 🌍",
+            "CS_STORY": "完整故事：4个世界 📜",
+            "CS_VISUALS": "新视觉特效和背景 ✨",
+            "CS_MORE": "还有更多！🚀",
+            "BACK": "返回"
         }
     },
     "PT": {
@@ -572,7 +612,15 @@ LANGUAGES = {
             "RUNES": "Runas",
             "NEXT_ROUND": "Próximo >",
             "LBL_ROTATE": "GIRAR",
-            "LBL_FLIP": "VIRAR"
+            "LBL_FLIP": "VIRAR",
+            "BTN_COMING_SOON": "EM BREVE",
+            "COMING_SOON_TITLE": "EM BREVE v1.0",
+            "CS_PYRO": "Novo Modo Pyro 🔥",
+            "CS_LANGS": "Suporte Russo e Árabe 🌍",
+            "CS_STORY": "História Completa: 4 Mundos 📜",
+            "CS_VISUALS": "Novos VFX e Fundos ✨",
+            "CS_MORE": "E muito mais! 🚀",
+            "BACK": "VOLTAR"
         }
     },
     "FR": {
@@ -664,7 +712,15 @@ LANGUAGES = {
             "RUNES": "Runes",
             "NEXT_ROUND": "Prochaine >",
             "LBL_ROTATE": "TOURNER",
-            "LBL_FLIP": "RETOURNER"
+            "LBL_FLIP": "RETOURNER",
+            "BTN_COMING_SOON": "BIENTÔT",
+            "COMING_SOON_TITLE": "BIENTÔT v1.0",
+            "CS_PYRO": "Nouveau Mode Pyro 🔥",
+            "CS_LANGS": "Support Russe et Arabe 🌍",
+            "CS_STORY": "Histoire Complète: 4 Mondes 📜",
+            "CS_VISUALS": "Nouveaux VFX et Arrière-plans ✨",
+            "CS_MORE": "Et bien plus ! 🚀",
+            "BACK": "RETOUR"
         }
     },
     "IT": {
@@ -756,7 +812,15 @@ LANGUAGES = {
             "RUNES": "Rune",
             "NEXT_ROUND": "Prossimo >",
             "LBL_ROTATE": "RUOTARE",
-            "LBL_FLIP": "CAPOVOLGERE"
+            "LBL_FLIP": "CAPOVOLGERE",
+            "BTN_COMING_SOON": "PRESTO",
+            "COMING_SOON_TITLE": "IN ARRIVO v1.0",
+            "CS_PYRO": "Nuova Modalità Pyro 🔥",
+            "CS_LANGS": "Supporto Russo e Arabo 🌍",
+            "CS_STORY": "Storia Completa: 4 Mondi 📜",
+            "CS_VISUALS": "Nuovi VFX e Sfondi ✨",
+            "CS_MORE": "E molto altro! 🚀",
+            "BACK": "INDIETRO"
         }
     }
 }
