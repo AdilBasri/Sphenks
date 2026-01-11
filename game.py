@@ -16,7 +16,8 @@ from runes import Rune, RUNE_DATA
 from ui import UIManager       
 from audio import AudioManager 
 from crt import CRTManager
-from save_data import SaveManager 
+from save_data import SaveManager
+from pyro_manager import PyroManager
 
 def resource_path(relative_path):
     """ Dosyanın nerede olduğunu akıllıca bulur """
@@ -102,6 +103,7 @@ class Game:
         self.h = VIRTUAL_H
         self.audio = AudioManager()
         self.ui = UIManager(self)
+        self.pyro_manager = PyroManager(self)
         self.crt = CRTManager()
         
         # Initialize intro video manager (after screen creation)
@@ -307,6 +309,14 @@ class Game:
 
         self.refill_hand()
         self.state = STATE_PLAYING
+
+    def start_pyro_mode(self):
+        """Start Pyro Mode (1-bit puzzle defense)"""
+        self.audio.play('select')
+        self.state = STATE_PYRO
+        self.pyro_manager.start_level(1)
+        # Stop current music for minimal Pyro theme
+        pygame.mixer.music.stop()
 
     def get_smart_block_key(self):
         keys = list(SHAPES.keys())
@@ -706,6 +716,12 @@ class Game:
                                 self.show_reset_confirm = True
                                 self.input_cooldown = 10
                                 self.audio.play('select')
+                        
+                        # Check Pyro debug button
+                        if hasattr(self.ui, 'pyro_btn_rect'):
+                            if self.ui.pyro_btn_rect.collidepoint(mx, my) and self.input_cooldown == 0:
+                                self.start_pyro_mode()
+                                self.input_cooldown = 10
                         
                         # Check coming soon button
                         if hasattr(self.ui, 'coming_soon_btn_rect'):
@@ -1234,6 +1250,10 @@ class Game:
 
             return
         
+        elif self.state == STATE_PYRO:
+            self.pyro_manager.update(1)
+            return
+
         elif self.state == STATE_TRAINING:
             # Tutorial mode - update blocks and runes for animation
             for b in self.blocks: 
@@ -1432,6 +1452,8 @@ class Game:
                 font = pygame.font.SysFont("Arial", 22, bold=True)
                 txt = font.render(self.held_rune.icon, True, self.held_rune.color)
                 self.screen.blit(txt, txt.get_rect(center=(rx, ry)))
+        elif self.state == STATE_PYRO:
+            self.pyro_manager.draw(self.screen)
         elif self.state == STATE_ROUND_SELECT:
             self.ui.draw_round_select(self.screen, self)
         elif self.state == STATE_INTRO:

@@ -899,6 +899,19 @@ class UIManager:
         pygame.draw.rect(surface, reset_btn_fill, self.reset_btn_rect, border_radius=8)
         pygame.draw.rect(surface, reset_btn_border, self.reset_btn_rect, 2, border_radius=8)
         
+        # DEBUG: Pyro Button (top-right corner)
+        self.pyro_btn_rect = pygame.Rect(VIRTUAL_W - 140, 20, 120, 40)
+        is_pyro_hovered = self.pyro_btn_rect.collidepoint(mx, my)
+        pyro_btn_fill = (70, 70, 70) if is_pyro_hovered else (50, 50, 50)
+        
+        pygame.draw.rect(surface, pyro_btn_fill, self.pyro_btn_rect, border_radius=8)
+        pygame.draw.rect(surface, (100, 100, 100), self.pyro_btn_rect, 2, border_radius=8)
+        
+        # Render "DEBUG: PYRO" text
+        pyro_text = self.font_small.render("DEBUG: PYRO", True, (200, 200, 200))
+        pyro_text_rect = pyro_text.get_rect(center=self.pyro_btn_rect.center)
+        surface.blit(pyro_text, pyro_text_rect)
+        
         reset_text = self.font_bold.render(self.game.get_text("RESET_BTN"), True, (255, 200, 200))
         surface.blit(reset_text, reset_text.get_rect(center=self.reset_btn_rect.center))
         

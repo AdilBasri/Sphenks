@@ -98,6 +98,16 @@ SHOP_BG_COLOR = (15, 10, 20)
 TRASH_COLOR = (200, 50, 50)
 TRASH_HOVER_COLOR = (255, 100, 100)
 
+# 1-Bit Color Constants (Pyro Mode)
+COLOR_1BIT_BG = (20, 0, 20)
+COLOR_1BIT_FG = (230, 230, 230)
+COLOR_1BIT_ENEMY = (255, 255, 255)
+COLOR_PYRO_ACCENT = (222, 0, 177)
+
+# Pyro Mode Game Balance
+PYRO_ENEMY_SPEED = 1.5
+PYRO_SPAWN_DELAY = 1500
+
 # --- FONT ---
 FONT_NAME = 'Arial' 
 UI_FONT_SIZE = 16    
@@ -147,6 +157,7 @@ STATE_GAME_OVER = 'game_over'
 STATE_PAUSE = 'pause'
 STATE_DEMO_END = 'demo_end'
 STATE_COMING_SOON = 'coming_soon'
+STATE_PYRO = 'pyro_mode'
 
 # --- SETTINGS ---
 RESOLUTIONS = [
