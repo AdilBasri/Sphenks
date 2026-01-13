@@ -1,12 +1,13 @@
 {
     "total_debt": 1000000,
-    "debt_paid": 223332,
+    "debt_paid": 445235,
     "unlocked_items": [],
     "tutorial_complete": false,
     "settings": {
         "fullscreen": true,
-        "volume": 0.3075,
-        "language": "TR"
+        "volume": 0.0975,
+        "language": "TR",
+        "music_volume": 0.13421052631578947
     },
     "high_score": 16110
 }

@@ -230,9 +230,14 @@ class PyroManager:
             enemy.move_towards(self.core_pos, speed=PYRO_ENEMY_SPEED)
             enemy.update(dt)
             ex, ey = enemy.rect.center
-            if math.hypot(ex - self.core_pos[0], ey - self.core_pos[1]) < 15:
-                print("[PYRO] GAME OVER - Core destroyed!")
-                self.start_level(1)
+            dist = math.hypot(ex - self.core_pos[0], ey - self.core_pos[1])
+            if dist < 25:
+                # Fatal Hit logic
+                if hasattr(self.game, 'trigger_pyro_death'):
+                    self.game.trigger_pyro_death()
+                else:
+                    # Fallback if method missing
+                    print("Player Died")
                 return
 
         # Prune off-screen

@@ -153,7 +153,7 @@ class Game:
 
     # YENİ FONKSİYON: Düşman mantığını buraya taşıyoruz
     def update_pyro_enemies(self):
-        if self.ante < NEW_WORLD_ANTE: return
+        if self.round != 3: return
 
         # 1. Düşman Spawn
         self.pyro_spawn_timer += 1
@@ -178,10 +178,13 @@ class Game:
                 enemy['rect'].center = (int(enemy['x']), int(enemy['y']))
             
             if dist < 40:
-                self.enemies.remove(enemy)
-                self.pyro_flash_timer = 15
-                self.screen_shake = 10
-                self.audio.play('hit')
+                # Collision => Pyro death screen
+                self.enemies.clear()
+                self.pyro_spawn_timer = 0
+                self.pyro_flash_timer = 0
+                self.screen_shake = 0
+                self.trigger_pyro_death()
+                return
 
     def get_text(self, key):
         """Return localized text for current language, fallback to key."""
@@ -291,7 +294,7 @@ class Game:
     def init_game_session_data(self):
         """Reset per-session data for a fresh run"""
         self.round = 1
-        self.ante = 9
+        self.ante = 1
         self.score = 0
         self.visual_score = 0
         self.combo_counter = 0
@@ -317,38 +320,33 @@ class Game:
         self.state = STATE_ROUND_SELECT
 
     def start_round(self):
-        self.active_boss_effect = None
-        if self.round == 3:
-            self.current_boss = self.boss_preview
-            self.active_boss_effect = self.current_boss
-        else:
-            self.current_boss = None
-
-        self.level_target = self.get_blind_target(self.round)
-        
-        round_bonus = 0
-        if self.round == 1: round_bonus = 3
-        elif self.round >= 2: round_bonus = 6
-        self.void_count = BASE_VOID_COUNT + ((self.ante - 1) * 2) + round_bonus
-        
-        self.score = 0 
+        # Universal Reset - Clean slate for every round
+        self.state = STATE_PLAYING
+        self.score = 0
         self.visual_score = 0
         self.combo_counter = 0
+        self.enemies = []  # CRITICAL: Clear enemies every round
+        self.pyro_spawn_timer = 0
+        self.pyro_flash_timer = 0
         self.screen_shake = 0
         self.scoring_data = {'base': 0, 'mult': 0, 'total': 0}
-        
         self.grid.reset()
         self.blocks = []
         self.held_block = None
+        self.current_boss = None
         
-        if self.active_boss_effect == 'The Wall':
-            self.grid.place_stones(3)
-            self.particle_system.create_text(self.w//2, self.h//2, "BOSS: THE WALL", (150, 150, 150), font_path=self.font_name)
-            self.particle_system.atmosphere.trigger_shake(10, 4) 
-            self.crt.trigger_aberration(amount=2, duration=10)
-
+        # Difficulty Setup
+        self.level_target = self.get_blind_target(self.round)
+        round_bonus = 3 if self.round == 1 else 6
+        self.void_count = BASE_VOID_COUNT + ((self.ante - 1) * 2) + round_bonus
+        
+        # Boss Check
+        if self.round == 3:
+            self.active_boss_effect = 'Pyro Boss'
+        else:
+            self.active_boss_effect = None
+        
         self.refill_hand()
-        self.state = STATE_PLAYING
 
     def start_pyro_mode(self):
         """Start Pyro Mode (1-bit puzzle defense)"""
@@ -357,6 +355,15 @@ class Game:
         self.pyro_manager.start_level(1)
         # Stop current music for minimal Pyro theme
         pygame.mixer.music.stop()
+
+    def trigger_pyro_death(self):
+        """Handle Pyro Mode death/failure without ending run"""
+        self.state = STATE_PYRO_DEATH
+        self.audio.play('gameover')
+        # Select random death quote from current language
+        lang = getattr(self, 'current_language', 'EN')
+        death_quotes = DEATH_QUOTES.get(lang, DEATH_QUOTES.get('EN', ["..."]))
+        self.current_death_quote = random.choice(death_quotes)
 
     def get_smart_block_key(self):
         keys = list(SHAPES.keys())
@@ -515,6 +522,7 @@ class Game:
         # Update settings in save data
         save_data['settings']['fullscreen'] = self.temp_settings['fullscreen']
         save_data['settings']['volume'] = self.temp_settings['volume']
+        save_data['settings']['music_volume'] = self.temp_settings.get('music_volume', 0.5)
         save_data['settings']['language'] = self.temp_settings.get('language', self.current_language)
         
         # Apply resolution
@@ -531,9 +539,15 @@ class Game:
         if desired_full != current_full:
             self.set_fullscreen(desired_full)
         
-        # Apply volume
+        # Apply SFX volume
         if hasattr(self.audio, 'set_volume'):
             self.audio.set_volume(self.temp_settings['volume'])
+
+        # Apply music volume
+        try:
+            pygame.mixer.music.set_volume(self.temp_settings.get('music_volume', 0.5))
+        except Exception:
+            pass
 
         # Apply language immediately
         self.set_language(save_data['settings']['language'], play_sound=False)
@@ -549,10 +563,17 @@ class Game:
         save_data = self.save_manager.get_data()
         settings = save_data.get('settings', {})
         
-        # Apply volume
+        # Apply SFX volume
         volume = settings.get('volume', 0.5)
         if hasattr(self.audio, 'set_volume'):
             self.audio.set_volume(volume)
+
+        # Apply music volume
+        music_volume = settings.get('music_volume', 0.5)
+        try:
+            pygame.mixer.music.set_volume(music_volume)
+        except Exception:
+            pass
 
         # Apply language (refresh fonts without playing sounds on startup)
         lang_code = settings.get('language', DEFAULT_LANGUAGE)
@@ -940,45 +961,6 @@ class Game:
 
             elif self.state == STATE_PLAYING:
             
-            # --- PYRO MODU (ANTE 9+) DÜŞMAN MANTIĞI ---
-                if self.ante >= NEW_WORLD_ANTE:
-                # 1. Düşman Spawn (Yaratma)
-                   self.pyro_spawn_timer += 1
-                if self.pyro_spawn_timer >= PYRO_SPAWN_DELAY:
-                    self.pyro_spawn_timer = 0
-                    # Ekranın rastgele bir kenarından düşman yarat
-                    side = random.choice(['top', 'bottom', 'left', 'right'])
-                    if side == 'top': ex, ey = random.randint(0, VIRTUAL_W), -40
-                    elif side == 'bottom': ex, ey = random.randint(0, VIRTUAL_W), VIRTUAL_H + 40
-                    elif side == 'left': ex, ey = -40, random.randint(0, VIRTUAL_H)
-                    else: ex, ey = VIRTUAL_W + 40, random.randint(0, VIRTUAL_H)
-                    
-                    # Düşmanı sözlük olarak listeye ekle
-                    self.enemies.append({'x': float(ex), 'y': float(ey), 'rect': pygame.Rect(ex, ey, 30, 30)})
-
-                # 2. Düşman Hareketi ve Çarpışma
-                center_x, center_y = VIRTUAL_W // 2, VIRTUAL_H // 2
-                
-                # Listeyi kopyalayarak dön (silme işlemi güvenli olsun diye)
-                for enemy in self.enemies[:]:
-                    # Merkeze doğru vektör hesabı
-                    dx = center_x - enemy['x']
-                    dy = center_y - enemy['y']
-                    dist = math.hypot(dx, dy)
-                    
-                    if dist != 0:
-                        enemy['x'] += (dx / dist) * PYRO_ENEMY_SPEED
-                        enemy['y'] += (dy / dist) * PYRO_ENEMY_SPEED
-                        enemy['rect'].center = (int(enemy['x']), int(enemy['y']))
-                    
-                    # Merkeze ulaştı mı? (Core Hasarı)
-                    if dist < 40: # Merkeze çok yaklaştı
-                        self.enemies.remove(enemy)
-                        self.pyro_flash_timer = 15 # Ekranı kırmızı yap
-                        self.screen_shake = 10
-                        self.audio.play('hit')
-                        # İstersen burada: self.void_count -= 1 veya self.score -= 100 yapabilirsin.
-
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE: self.state = STATE_PAUSE
                     if event.key == pygame.K_r and self.held_block:
@@ -1013,7 +995,7 @@ class Game:
 
                 elif event.type == pygame.MOUSEBUTTONUP:
 
-                    if event.button == 3 and self.ante >= NEW_WORLD_ANTE:
+                    if event.button == 3 and (self.round == 3 or self.ante >= NEW_WORLD_ANTE):
                         hit = False
                         for enemy in self.enemies[:]:
                             if enemy['rect'].collidepoint(mx, my):
@@ -1309,12 +1291,31 @@ class Game:
                 # Volume slider dragging
                 elif event.type == pygame.MOUSEMOTION:
                     if pygame.mouse.get_pressed()[0] and hasattr(self.ui, 'settings_buttons'):
+                        # SFX Volume slider
                         slider = self.ui.settings_buttons.get('volume_slider')
                         if slider and slider.collidepoint(mx, my):
                             # Calculate volume from mouse position
                             relative_x = mx - slider.x
                             volume = max(0.0, min(1.0, relative_x / slider.width))
                             self.temp_settings['volume'] = volume
+                        
+                        # Music Volume slider
+                        music_slider = self.ui.settings_buttons.get('music_slider')
+                        if music_slider and music_slider.collidepoint(mx, my):
+                            # Calculate music volume from mouse position
+                            relative_x = mx - music_slider.x
+                            music_volume = max(0.0, min(1.0, relative_x / music_slider.width))
+                            self.temp_settings['music_volume'] = music_volume
+
+            elif self.state == STATE_PYRO_DEATH:
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    # Check if TRY AGAIN button was clicked
+                    if hasattr(self.ui, 'pyro_death_button'):
+                        if self.ui.pyro_death_button.collidepoint(mx, my) and self.input_cooldown == 0:
+                            self.audio.play('select')
+                            # Trigger clean round reset (includes enemy clear)
+                            self.start_round()
+                            self.input_cooldown = 15
 
             elif self.state == STATE_GAME_OVER:
                 if event.type == pygame.MOUSEBUTTONDOWN: self.state = STATE_MENU; self.init_game_session_data()
@@ -1344,10 +1345,6 @@ class Game:
                 pygame.mixer.music.load(resource_path("assets/music.mp3"))
                 pygame.mixer.music.play(-1)
 
-            return
-        
-        elif self.state == STATE_PYRO:
-            self.pyro_manager.update(1)
             return
 
         elif self.state == STATE_TRAINING:
@@ -1396,6 +1393,8 @@ class Game:
         
         elif self.state == STATE_PLAYING:
             for b in self.blocks: b.update()
+            # Update Pyro enemies (round 3 or Ante 9+ overlay mode)
+            self.update_pyro_enemies()
             # Rune dragging - use direct mouse coordinates (no conversion needed)
             if self.held_rune and self.held_rune.dragging:
                 mx, my = pygame.mouse.get_pos()
@@ -1456,8 +1455,8 @@ class Game:
         # All other states - normal rendering
         self.ui.draw_bg(self.screen)
 
-        # Pyro Mode (Ante 9+): Dark red overlay over animated background
-        if self.ante >= NEW_WORLD_ANTE and self.state in [STATE_PLAYING, STATE_SCORING, STATE_TRAINING]:
+        # Pyro Mode (Round 3 only): Dark red overlay over animated background
+        if self.round == 3 and self.state in [STATE_PLAYING, STATE_SCORING, STATE_PYRO_DEATH]:
             overlay = pygame.Surface((VIRTUAL_W, VIRTUAL_H), pygame.SRCALPHA)
             overlay.fill((20, 0, 5, 230))  # High alpha for dark red tint
             self.screen.blit(overlay, (0, 0))
@@ -1554,8 +1553,6 @@ class Game:
                 font = pygame.font.SysFont("Arial", 22, bold=True)
                 txt = font.render(self.held_rune.icon, True, self.held_rune.color)
                 self.screen.blit(txt, txt.get_rect(center=(rx, ry)))
-        elif self.state == STATE_PYRO:
-            self.pyro_manager.draw(self.screen)
         elif self.state == STATE_ROUND_SELECT:
             self.ui.draw_round_select(self.screen, self)
         elif self.state == STATE_INTRO:
@@ -1584,7 +1581,7 @@ class Game:
             self.grid.draw(self.screen, theme)
 
             # --- PYRO MODE CORRECTED DRAWING ---
-            if self.ante >= NEW_WORLD_ANTE:
+            if self.round == 3 and self.state in [STATE_PLAYING, STATE_SCORING]:
                 # Draw Enemies (NOW ON TOP OF GRID)
                 for enemy in self.enemies:
                     ex, ey = enemy['rect'].center
@@ -1655,6 +1652,7 @@ class Game:
                 self.ui.draw_shop(self.screen, self)
 
             elif self.state == STATE_PAUSE: self.ui.draw_pause_overlay(self.screen)
+            elif self.state == STATE_PYRO_DEATH: self.ui.draw_pyro_death(self.screen, self)
             elif self.state == STATE_GAME_OVER: self.ui.draw_game_over(self.screen, self.score)
             
             # Tooltips
@@ -1678,7 +1676,7 @@ class Game:
         self.crt.draw(self.screen)
         
         # Draw Pharaoh on top of everything (only in gameplay states)
-        if self.state in [STATE_PLAYING, STATE_SCORING, STATE_PYRO, STATE_TRAINING]:
+        if self.state in [STATE_PLAYING, STATE_SCORING, STATE_TRAINING]:
             self.ui.draw_overlay_elements(self.screen)
         
         pygame.display.flip()

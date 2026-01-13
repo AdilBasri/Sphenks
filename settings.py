@@ -158,6 +158,7 @@ STATE_PAUSE = 'pause'
 STATE_DEMO_END = 'demo_end'
 STATE_COMING_SOON = 'coming_soon'
 STATE_PYRO = 'pyro_mode'
+STATE_PYRO_DEATH = 'pyro_death'
 
 # --- SETTINGS ---
 RESOLUTIONS = [
@@ -427,4 +428,64 @@ PHARAOH_TUTORIAL = {
     1: "Drag that block. Don't be clumsy.",
     2: "Garbage goes to the trash. Like you.",
     3: "Good. Now work faster."
+}
+
+# --- DEATH QUOTES ---
+DEATH_QUOTES = {
+    'EN': [
+        "Your back broke from the weight...",
+        "The system purged you.",
+        "You were too slow...",
+        "Simulation Resetting...",
+        "Critical Failure."
+    ],
+    'TR': [
+        "Sırtın yükü taşıyamadı...",
+        "Sistem seni sildi.",
+        "Çok yavaştın...",
+        "Simülasyon Sıfırlanıyor...",
+        "Kritik Hata: Beden Bulunamadı."
+    ],
+    'DE': [
+        "Dein Rücken brach unter dem Gewicht...",
+        "Das System löschte dich.",
+        "Du warst zu langsam...",
+        "Simulation wird zurückgesetzt...",
+        "Kritischer Fehler."
+    ],
+    'ES': [
+        "Tu espalda se rompió bajo el peso...",
+        "El sistema te purificó.",
+        "Eras demasiado lento...",
+        "Reiniciando simulación...",
+        "Fallo crítico."
+    ],
+    'ZH': [
+        "你的背部无法承载重量...",
+        "系统将你清除了。",
+        "你太慢了...",
+        "模拟重置中...",
+        "致命错误。"
+    ],
+    'PT': [
+        "Suas costas quebraram sob o peso...",
+        "O sistema o purificou.",
+        "Você era muito lento...",
+        "Reiniciando simulação...",
+        "Falha crítica."
+    ],
+    'FR': [
+        "Ton dos s'est cassé sous le poids...",
+        "Le système t'a purifié.",
+        "Tu étais trop lent...",
+        "Réinitialisation de la simulation...",
+        "Erreur critique."
+    ],
+    'IT': [
+        "La tua schiena si è rotta sotto il peso...",
+        "Il sistema ti ha purificato.",
+        "Eri troppo lento...",
+        "Reinizializzazione della simulazione...",
+        "Errore critico."
+    ]
 }

@@ -1062,20 +1062,51 @@ class UIManager:
             x = start_x + i * (panel_w + gap)
             y = 100
             rect = pygame.Rect(x, y, panel_w, panel_h)
-            bg_col = (30, 30, 40)
-            if is_active: bg_col = (50, 50, 60)
-            elif is_passed: bg_col = (20, 20, 25)
+            
+            # Pyro Boss (Round 3) styling
+            danger_red = (255, 50, 50)
+            if i == 2:
+                bg_col = (40, 0, 0)
+                if is_active: bg_col = (60, 0, 0)
+                elif is_passed: bg_col = (20, 0, 0)
+            else:
+                bg_col = (30, 30, 40)
+                if is_active: bg_col = (50, 50, 60)
+                elif is_passed: bg_col = (20, 20, 25)
+            
             pygame.draw.rect(surface, bg_col, rect, border_radius=15)
-            border_col = (60, 60, 70)
-            if is_active: border_col = colors[i]
-            pygame.draw.rect(surface, border_col, rect, 3 if is_active else 1, border_radius=15)
-            lbl = self.font_bold.render(blinds[i], True, colors[i] if not is_passed else (100,100,100))
-            surface.blit(lbl, lbl.get_rect(center=(rect.centerx, rect.y + 30)))
+            
+            # Border styling
+            if i == 2:
+                border_col = danger_red
+                if is_active:
+                    border_col = (min(255, danger_red[0] + 30), danger_red[1], danger_red[2])
+                border_width = 3 if is_active else 2
+            else:
+                border_col = (60, 60, 70)
+                if is_active: border_col = colors[i]
+                border_width = 3 if is_active else 1
+            
+            pygame.draw.rect(surface, border_col, rect, border_width, border_radius=15)
+            
+            # Label text
+            if i == 2:
+                lbl = self.font_bold.render("PYRO BOSS", True, danger_red)
+            else:
+                lbl = self.font_bold.render(blinds[i], True, colors[i] if not is_passed else (100,100,100))
+            surface.blit(lbl, lbl.get_rect(center=(rect.centerx, rect.y + 40)))
+            
+            # Draw eye/skull icon for Pyro Boss
+            if i == 2:
+                eye_cx, eye_cy = rect.centerx, rect.y + 15
+                pygame.draw.circle(surface, danger_red, (eye_cx, eye_cy), 8)
+                pygame.draw.circle(surface, (0, 0, 0), (eye_cx, eye_cy), 4)
+            
             score_lbl = self.font_score.render(f"{self.t('TOTAL')}: {targets[i]}", True, (255,255,255))
             if is_passed: score_lbl.set_alpha(100)
             surface.blit(score_lbl, score_lbl.get_rect(center=(rect.centerx, rect.centery)))
             
-            if i == 2:
+            if i == 2 and not (game.ante >= NEW_WORLD_ANTE):
                 boss_name = game.boss_preview
                 b_info = BOSS_DATA.get(boss_name, {'desc': '???'})
                 b_txt = self.font_small.render(boss_name, True, (255, 100, 100))
@@ -1638,6 +1669,49 @@ class UIManager:
         surface.blit(s, s.get_rect(center=(cx, cy + 10)))
         surface.blit(r, r.get_rect(center=(cx, cy + 60)))
 
+    def draw_pyro_death(self, surface, game):
+        """Draw Pyro Mode death/failure screen with blood effects and dramatic visuals"""
+        import random
+        
+        # Black background
+        surface.fill((0, 0, 0))
+        
+        # Blood drip effect - random vertical red lines from top
+        for _ in range(30):
+            drip_x = random.randint(0, VIRTUAL_W)
+            drip_y = random.randint(-100, 0)
+            drip_length = random.randint(50, 150)
+            drip_color = (random.randint(150, 255), 0, 0)
+            pygame.draw.line(surface, drip_color, (drip_x, drip_y), (drip_x + random.randint(-5, 5), drip_y + drip_length), random.randint(2, 5))
+        
+        cx, cy = VIRTUAL_W // 2, VIRTUAL_H // 2
+        
+        # "YOU DIED" title in big red
+        title_text = self.t('YOU_DIED') if 'YOU_DIED' in LANGUAGES.get(game.current_language, {}).get('text', {}) else "YOU DIED"
+        title = self.title_font.render(title_text, True, (255, 0, 0))
+        surface.blit(title, title.get_rect(center=(cx, cy - 80)))
+        
+        # Death quote from Pharaoh below title
+        quote_text = getattr(game, 'current_death_quote', "The Pharaoh is disappointed.")
+        quote_render = self.font_big.render(quote_text, True, (200, 200, 200))
+        surface.blit(quote_render, quote_render.get_rect(center=(cx, cy + 20)))
+        
+        # TRY AGAIN button at bottom
+        btn_width, btn_height = 220, 55
+        btn_x = cx - btn_width // 2
+        btn_y = cy + 120
+        btn_rect = pygame.Rect(btn_x, btn_y, btn_width, btn_height)
+        
+        # Draw button with gothic red styling
+        pygame.draw.rect(surface, (150, 0, 0), btn_rect, border_radius=10)
+        pygame.draw.rect(surface, (255, 0, 0), btn_rect, 3, border_radius=10)
+        
+        btn_text = self.font_big.render(self.t('BTN_TRY_AGAIN'), True, (255, 255, 255))
+        surface.blit(btn_text, btn_text.get_rect(center=btn_rect.center))
+        
+        # Store button rect for event handling
+        self.pyro_death_button = btn_rect
+
     def draw_debt_screen(self, surface, game):
         """Dramatic debt repayment screen with animations"""
         
@@ -1940,206 +2014,177 @@ class UIManager:
         return lines[:2]  # Max 2 lines
 
     def draw_settings(self, surface, game):
-        """Settings screen with resolution, fullscreen, and volume controls"""
+        """Compact settings screen with tighter vertical spacing."""
         from settings import RESOLUTIONS
-        
+
         # Dark background
         overlay = pygame.Surface((VIRTUAL_W, VIRTUAL_H), pygame.SRCALPHA)
         overlay.fill((10, 10, 15, 250))
         surface.blit(overlay, (0, 0))
-        
+
         cx = VIRTUAL_W // 2
-        cy = VIRTUAL_H // 2
-        
-        # Title
-        title = self.title_font.render(self.t('SETTINGS'), True, ACCENT_COLOR)
-        surface.blit(title, title.get_rect(center=(cx, 40)))
-        
-        # Panel
+
+        # Panel (moved up, shorter height)
         panel_w = 500
-        panel_h = 400
+        panel_h = 420
         panel_x = cx - panel_w // 2
-        panel_y = 100
-        
+        panel_y = 40
         panel_rect = pygame.Rect(panel_x, panel_y, panel_w, panel_h)
         pygame.draw.rect(surface, (30, 30, 40), panel_rect, border_radius=15)
         pygame.draw.rect(surface, (100, 100, 100), panel_rect, 2, border_radius=15)
-        
+
+        # Reset settings buttons each frame
+        self.settings_buttons = {}
+
         # Get current settings
         save_data = game.save_manager.get_data()
         settings = save_data['settings']
-        
+
         # Track temp settings if not already initialized
         if not hasattr(game, 'temp_settings'):
             game.temp_settings = {
                 'fullscreen': settings.get('fullscreen', False),
                 'volume': settings.get('volume', 0.5),
+                'music_volume': settings.get('music_volume', 0.5),
                 'resolution_index': self._get_resolution_index(game),
                 'language': settings.get('language', game.current_language)
             }
-        
+
         mx, my = pygame.mouse.get_pos()
-        
-        # --- FULLSCREEN TOGGLE ---
-        y_offset = panel_y + 60
-        label = self.font_bold.render("Fullscreen:", True, (255, 255, 255))
-        surface.blit(label, (panel_x + 50, y_offset))
-        
-        # Toggle button
-        toggle_x = panel_x + panel_w - 150
-        toggle_w = 80
-        toggle_h = 35
-        toggle_rect = pygame.Rect(toggle_x, y_offset - 5, toggle_w, toggle_h)
-        
+        row_height = 50
+
+        # Title
+        title = self.title_font.render(self.t('SETTINGS'), True, ACCENT_COLOR)
+        surface.blit(title, title.get_rect(center=(cx, panel_y + 20)))
+
+        # Row 1: Fullscreen
+        y = panel_y + 60
+        label = self.font_reg.render("Fullscreen:", True, (255, 255, 255))
+        surface.blit(label, (panel_x + 30, y))
+
+        toggle_w, toggle_h = 80, 32
+        toggle_rect = pygame.Rect(panel_x + panel_w - toggle_w - 30, y - 6, toggle_w, toggle_h)
         is_on = game.temp_settings['fullscreen']
         toggle_color = (50, 200, 50) if is_on else (200, 50, 50)
-        hover_toggle = toggle_rect.collidepoint(mx, my)
-        if hover_toggle:
+        if toggle_rect.collidepoint(mx, my):
             toggle_color = tuple(min(255, c + 30) for c in toggle_color)
-        
-        pygame.draw.rect(surface, toggle_color, toggle_rect, border_radius=17)
+        pygame.draw.rect(surface, toggle_color, toggle_rect, border_radius=14)
         toggle_text = self.font_bold.render("ON" if is_on else "OFF", True, (255, 255, 255))
         surface.blit(toggle_text, toggle_text.get_rect(center=toggle_rect.center))
-        
-        # Store for event handling
-        if not hasattr(self, 'settings_buttons'):
-            self.settings_buttons = {}
         self.settings_buttons['fullscreen'] = toggle_rect
 
-        # --- LANGUAGE SELECTOR ---
-        y_offset += 60
-        lang_label = self.font_bold.render(f"{self.t('LANGUAGE') if self.t('LANGUAGE') else 'Language'}:", True, (255, 255, 255))
-        surface.blit(lang_label, (panel_x + 50, y_offset))
+        # Row 2: Language
+        y += row_height
+        lang_label = self.font_reg.render(self.t('LANGUAGE') if self.t('LANGUAGE') else 'Language', True, (255, 255, 255))
+        surface.blit(lang_label, (panel_x + 30, y))
 
         lang_code = game.temp_settings.get('language', game.current_language)
         lang_name = LANGUAGES.get(lang_code, {}).get('name', lang_code)
-        lang_rect = pygame.Rect(panel_x + panel_w - 220, y_offset - 10, 180, 40)
+        lang_rect = pygame.Rect(panel_x + panel_w - 210, y - 8, 180, 36)
         hover_lang = lang_rect.collidepoint(mx, my)
         lang_bg = (60, 60, 80) if hover_lang else (40, 40, 55)
         pygame.draw.rect(surface, lang_bg, lang_rect, border_radius=8)
         pygame.draw.rect(surface, ACCENT_COLOR if hover_lang else (120, 120, 140), lang_rect, 2, border_radius=8)
-        lang_text = self.font_bold.render(f"{lang_name}", True, (255, 255, 255))
+        lang_text = self.font_bold.render(lang_name, True, (255, 255, 255))
         surface.blit(lang_text, lang_text.get_rect(center=lang_rect.center))
         self.settings_buttons['language'] = lang_rect
-        
-        # --- VOLUME SLIDER ---
-        y_offset += 80
-        label = self.font_bold.render("Master Volume:", True, (255, 255, 255))
-        surface.blit(label, (panel_x + 50, y_offset))
-        
-        # Slider
-        slider_x = panel_x + 50
-        slider_y = y_offset + 35
-        slider_w = panel_w - 100
-        slider_h = 10
-        
-        # Background track
-        track_rect = pygame.Rect(slider_x, slider_y, slider_w, slider_h)
-        pygame.draw.rect(surface, (50, 50, 50), track_rect, border_radius=5)
-        
-        # Filled portion
-        volume = game.temp_settings['volume']
-        fill_w = int(slider_w * volume)
-        fill_rect = pygame.Rect(slider_x, slider_y, fill_w, slider_h)
-        pygame.draw.rect(surface, ACCENT_COLOR, fill_rect, border_radius=5)
-        
-        # Handle (circle)
-        handle_x = slider_x + fill_w
-        handle_y = slider_y + slider_h // 2
-        handle_radius = 12
-        handle_rect = pygame.Rect(handle_x - handle_radius, handle_y - handle_radius, 
-                                   handle_radius * 2, handle_radius * 2)
-        
-        hover_handle = handle_rect.collidepoint(mx, my) or track_rect.collidepoint(mx, my)
-        handle_color = (255, 255, 255) if hover_handle else (200, 200, 200)
-        pygame.draw.circle(surface, handle_color, (handle_x, handle_y), handle_radius)
-        pygame.draw.circle(surface, ACCENT_COLOR, (handle_x, handle_y), handle_radius - 2)
-        
-        # Volume percentage
-        vol_text = self.font_bold.render(f"{int(volume * 100)}%", True, (255, 255, 255))
-        surface.blit(vol_text, (panel_x + panel_w - 80, y_offset))
-        
-        # Store slider info for dragging
-        self.settings_buttons['volume_slider'] = track_rect
-        self.settings_buttons['volume_handle'] = handle_rect
-        
-        # --- RESOLUTION SELECTOR ---
-        y_offset += 80
-        label = self.font_bold.render("Resolution:", True, (255, 255, 255))
-        surface.blit(label, (panel_x + 50, y_offset))
-        
-        # Current resolution
+
+        # Slider helper
+        def draw_slider(label_text, value, y_pos, key_slider, key_handle):
+            label_surf = self.font_reg.render(label_text, True, (255, 255, 255))
+            surface.blit(label_surf, (panel_x + 30, y_pos))
+
+            slider_x = panel_x + 30
+            slider_y = y_pos + 26
+            slider_w = panel_w - 120
+            slider_h = 10
+
+            track_rect = pygame.Rect(slider_x, slider_y, slider_w, slider_h)
+            pygame.draw.rect(surface, (50, 50, 50), track_rect, border_radius=5)
+
+            fill_w = int(slider_w * value)
+            fill_rect = pygame.Rect(slider_x, slider_y, fill_w, slider_h)
+            pygame.draw.rect(surface, ACCENT_COLOR, fill_rect, border_radius=5)
+
+            handle_x = slider_x + fill_w
+            handle_y = slider_y + slider_h // 2
+            handle_radius = 10
+            handle_rect = pygame.Rect(handle_x - handle_radius, handle_y - handle_radius, handle_radius * 2, handle_radius * 2)
+            hover_handle = handle_rect.collidepoint(mx, my) or track_rect.collidepoint(mx, my)
+            handle_color = (255, 255, 255) if hover_handle else (200, 200, 200)
+            pygame.draw.circle(surface, handle_color, (handle_x, handle_y), handle_radius)
+            pygame.draw.circle(surface, ACCENT_COLOR, (handle_x, handle_y), handle_radius - 2)
+
+            pct_text = self.font_bold.render(f"{int(value * 100)}%", True, (255, 255, 255))
+            surface.blit(pct_text, (panel_x + panel_w - 80, y_pos))
+
+            self.settings_buttons[key_slider] = track_rect
+            self.settings_buttons[key_handle] = handle_rect
+
+        # Row 3: SFX Volume
+        y += row_height
+        draw_slider("SFX Volume:", game.temp_settings['volume'], y, 'volume_slider', 'volume_handle')
+
+        # Row 4: Music Volume
+        y += row_height
+        draw_slider("Music Volume:", game.temp_settings.get('music_volume', 0.5), y, 'music_slider', 'music_handle')
+
+        # Row 5: Resolution selector
+        y += row_height
+        res_label = self.font_reg.render("Resolution:", True, (255, 255, 255))
+        surface.blit(res_label, (panel_x + 30, y))
+
         res_index = game.temp_settings['resolution_index']
         current_res = RESOLUTIONS[res_index]
         res_text = f"{current_res[0]} x {current_res[1]}"
-        
-        # Left arrow
-        left_arrow_x = panel_x + panel_w - 250
-        arrow_w = 40
-        arrow_h = 35
-        left_rect = pygame.Rect(left_arrow_x, y_offset - 5, arrow_w, arrow_h)
-        
+
+        arrow_w, arrow_h = 36, 32
+        left_rect = pygame.Rect(panel_x + panel_w - 210, y - 6, arrow_w, arrow_h)
+        right_rect = pygame.Rect(panel_x + panel_w - 210 + arrow_w + 110, y - 6, arrow_w, arrow_h)
+
         hover_left = left_rect.collidepoint(mx, my)
-        arrow_color = ACCENT_COLOR if hover_left else (100, 100, 100)
-        pygame.draw.rect(surface, arrow_color, left_rect, border_radius=5)
-        left_text = self.font_bold.render("<", True, (255, 255, 255))
-        surface.blit(left_text, left_text.get_rect(center=left_rect.center))
-        
-        # Resolution text
-        res_display = self.font_bold.render(res_text, True, (255, 255, 255))
-        surface.blit(res_display, res_display.get_rect(center=(left_arrow_x + arrow_w + 70, y_offset + 15)))
-        
-        # Right arrow
-        right_arrow_x = left_arrow_x + arrow_w + 140 + 20
-        right_rect = pygame.Rect(right_arrow_x, y_offset - 5, arrow_w, arrow_h)
-        
         hover_right = right_rect.collidepoint(mx, my)
-        arrow_color = ACCENT_COLOR if hover_right else (100, 100, 100)
-        pygame.draw.rect(surface, arrow_color, right_rect, border_radius=5)
+        pygame.draw.rect(surface, ACCENT_COLOR if hover_left else (100, 100, 100), left_rect, border_radius=6)
+        pygame.draw.rect(surface, ACCENT_COLOR if hover_right else (100, 100, 100), right_rect, border_radius=6)
+
+        left_text = self.font_bold.render("<", True, (255, 255, 255))
         right_text = self.font_bold.render(">", True, (255, 255, 255))
+        surface.blit(left_text, left_text.get_rect(center=left_rect.center))
         surface.blit(right_text, right_text.get_rect(center=right_rect.center))
-        
+
+        res_display = self.font_bold.render(res_text, True, (255, 255, 255))
+        surface.blit(res_display, res_display.get_rect(center=(left_rect.right + 55, y + 10)))
+
         self.settings_buttons['res_left'] = left_rect
         self.settings_buttons['res_right'] = right_rect
-        
-        # --- SAVE & BACK BUTTON ---
-        # Position dynamically: 50 pixels below the Resolution selector row
-        btn_w = 180
-        btn_h = 50
-        btn_x = cx - btn_w // 2
-        btn_y = y_offset + 50
-        
-        save_btn = pygame.Rect(btn_x, btn_y, btn_w, btn_h)
-        self.settings_buttons['save'] = save_btn
-        
+
+        # Buttons row
+        btn_y = panel_y + 340
+        btn_h = 44
+
+        save_btn = pygame.Rect(cx + 40, btn_y, 160, btn_h)
+        cancel_btn = pygame.Rect(cx - 200, btn_y, 140, btn_h)
+
+        # Save
         hover_save = save_btn.collidepoint(mx, my)
-        btn_color = (80, 60, 100) if hover_save else (50, 40, 70)
-        border_color = ACCENT_COLOR if hover_save else (100, 100, 100)
-        
-        pygame.draw.rect(surface, btn_color, save_btn, border_radius=8)
-        pygame.draw.rect(surface, border_color, save_btn, 2, border_radius=8)
-        
+        save_color = (80, 60, 100) if hover_save else (50, 40, 70)
+        save_border = ACCENT_COLOR if hover_save else (100, 100, 100)
+        pygame.draw.rect(surface, save_color, save_btn, border_radius=8)
+        pygame.draw.rect(surface, save_border, save_btn, 2, border_radius=8)
         save_text = self.font_bold.render("SAVE & BACK", True, (255, 255, 255))
         surface.blit(save_text, save_text.get_rect(center=save_btn.center))
-        
-        # Back button (no save)
-        back_btn_w = 120
-        back_btn_h = 50
-        back_btn_x = 30
-        back_btn_y = VIRTUAL_H - back_btn_h - 30
-        
-        back_btn = pygame.Rect(back_btn_x, back_btn_y, back_btn_w, back_btn_h)
-        self.settings_buttons['back'] = back_btn
-        
-        hover_back = back_btn.collidepoint(mx, my)
-        btn_color = (60, 40, 40) if hover_back else (40, 30, 30)
-        border_color = (200, 100, 100) if hover_back else (100, 100, 100)
-        
-        pygame.draw.rect(surface, btn_color, back_btn, border_radius=8)
-        pygame.draw.rect(surface, border_color, back_btn, 2, border_radius=8)
-        
-        back_text = self.font_bold.render("CANCEL", True, (255, 255, 255))
-        surface.blit(back_text, back_text.get_rect(center=back_btn.center))
+
+        # Cancel
+        hover_cancel = cancel_btn.collidepoint(mx, my)
+        cancel_color = (60, 40, 40) if hover_cancel else (40, 30, 30)
+        cancel_border = (200, 100, 100) if hover_cancel else (100, 100, 100)
+        pygame.draw.rect(surface, cancel_color, cancel_btn, border_radius=8)
+        pygame.draw.rect(surface, cancel_border, cancel_btn, 2, border_radius=8)
+        cancel_text = self.font_bold.render("CANCEL", True, (255, 255, 255))
+        surface.blit(cancel_text, cancel_text.get_rect(center=cancel_btn.center))
+
+        self.settings_buttons['save'] = save_btn
+        self.settings_buttons['back'] = cancel_btn
     
     def _get_resolution_index(self, game):
         """Get current resolution index from actual screen size"""
