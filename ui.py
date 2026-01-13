@@ -187,6 +187,123 @@ class VoidWidget(pygame.sprite.Sprite):
             self.image = self.animation_list[self.frame_index]
     def draw(self, surface): surface.blit(self.image, self.rect)
 
+# --- PHARAOH ASSISTANT (Animated Character) ---
+class PharaohAssistant:
+    def __init__(self):
+        # Load spritesheet (5 frames)
+        try:
+            base_path = os.path.dirname(os.path.abspath(__file__))
+            path = os.path.join(base_path, "assets", "pharaoh.png")
+            sprite_sheet = pygame.image.load(path).convert_alpha()
+            sheet_w = sprite_sheet.get_width()
+            sheet_h = sprite_sheet.get_height()
+            frame_w = sheet_w // 5  # 5 frames
+            
+            # Split spritesheet into frames
+            self.frames = []
+            for i in range(5):
+                frame = sprite_sheet.subsurface((i * frame_w, 0, frame_w, sheet_h))
+                self.frames.append(frame)
+        except:
+            # Fallback: create simple colored squares if image not found
+            self.frames = []
+            for i in range(5):
+                surf = pygame.Surface((32, 32), pygame.SRCALPHA)
+                surf.fill((200, 150, 50, 255))  # Gold color
+                self.frames.append(surf)
+        
+        # Animation state
+        self.frame_index = 0
+        self.timer = 0  # Frame timer for animation
+        self.anim_speed = 150  # 150ms per frame
+        
+        # Position: Top-left, just to the right of sidebar
+        self.x = SIDEBAR_WIDTH + 25
+        self.y = 65
+        
+        # Speech bubble system
+        self.current_text = ""
+        self.speech_timer = 0
+        self.speech_duration = 180  # Default duration in frames
+        
+    def say(self, text, duration=180):
+        """Make the Pharaoh say something"""
+        self.current_text = text
+        self.speech_timer = duration
+        self.speech_duration = duration
+        
+    def update(self):
+        """Update animation and speech timer"""
+        # Update speech timer
+        if self.speech_timer > 0:
+            self.speech_timer -= 1
+            if self.speech_timer <= 0:
+                self.current_text = ""
+            
+            # Animate when speaking
+            self.timer += 1
+            if self.timer > 10:
+                self.timer = 0
+                if self.frames:
+                    self.frame_index = (self.frame_index + 1) % len(self.frames)
+        else:
+            # Reset to idle frame (first frame) when silent
+            self.frame_index = 0
+            self.timer = 0
+    
+    def draw(self, surface):
+        """Draw the Pharaoh sprite and speech bubble"""
+        # Draw current animation frame
+        current_frame = self.frames[self.frame_index]
+        frame_rect = current_frame.get_rect(center=(self.x, self.y))
+        surface.blit(current_frame, frame_rect)
+        
+        # Draw speech bubble if speaking
+        if self.current_text and self.speech_timer > 0:
+            self._draw_speech_bubble(surface)
+    
+    def _draw_speech_bubble(self, surface):
+        """Draw speech bubble with auto-resizing (appears to the RIGHT)"""
+        # Create font for speech text
+        font = pygame.font.SysFont("Arial", 12, bold=True)
+        
+        # Render text to get dimensions
+        text_surf = font.render(self.current_text, True, (0, 0, 0))
+        text_w = text_surf.get_width()
+        text_h = text_surf.get_height()
+        
+        # Bubble padding
+        padding = 8
+        bubble_w = text_w + padding * 2
+        bubble_h = text_h + padding * 2
+        
+        # Position bubble to the RIGHT of Pharaoh
+        bubble_x = self.x + 50  # To the right
+        bubble_y = self.y - bubble_h // 2  # Centered vertically
+        
+        # Ensure bubble stays on screen
+        bubble_x = max(5, min(bubble_x, VIRTUAL_W - bubble_w - 5))
+        bubble_y = max(5, bubble_y)
+        
+        # Draw bubble background (rounded rectangle)
+        bubble_rect = pygame.Rect(bubble_x, bubble_y, bubble_w, bubble_h)
+        pygame.draw.rect(surface, (255, 255, 255), bubble_rect, border_radius=8)
+        pygame.draw.rect(surface, (0, 0, 0), bubble_rect, 2, border_radius=8)
+        
+        # Draw small triangle pointing LEFT to character
+        triangle_tip = (self.x + 35, self.y)  # Point at character
+        triangle_top = (bubble_x, bubble_y + bubble_h // 2 - 8)
+        triangle_bottom = (bubble_x, bubble_y + bubble_h // 2 + 8)
+        pygame.draw.polygon(surface, (255, 255, 255), [triangle_tip, triangle_top, triangle_bottom])
+        pygame.draw.line(surface, (0, 0, 0), triangle_top, triangle_tip, 2)
+        pygame.draw.line(surface, (0, 0, 0), triangle_bottom, triangle_tip, 2)
+        
+        # Draw text centered in bubble
+        text_x = bubble_x + padding
+        text_y = bubble_y + padding
+        surface.blit(text_surf, (text_x, text_y))
+
+
 class UIManager:
     def __init__(self, game):
         self.game = game
@@ -199,6 +316,7 @@ class UIManager:
         self.refresh_fonts()
         
         self.void_widget = VoidWidget(VIRTUAL_W - 20, VIRTUAL_H - 20, scale=0.8)
+        self.pharaoh = PharaohAssistant()
         self.bg_tiles = []
         self.tile_w = 0; self.tile_h = 0
         self.ra_frames = []; self.symbol_images = []
@@ -419,6 +537,7 @@ class UIManager:
 
     def update(self):
         self.void_widget.update()
+        self.pharaoh.update()
         if self.bg_tiles:
             mx, my = pygame.mouse.get_pos()
             rows = len(self.bg_tiles); cols = len(self.bg_tiles[0])
@@ -521,7 +640,8 @@ class UIManager:
         elif game.endless_mode:
             layer_txt = layer_font.render(f"{self.t('LAYER')} ∞", True, gold)
         else:
-            layer_txt = layer_font.render(f"{self.t('LAYER')} {game.ante} / 8", True, gold)
+            max_ante = 16 if game.ante > 8 else 8
+            layer_txt = layer_font.render(f"{self.t('LAYER')} {game.ante} / {max_ante}", True, gold)
         surface.blit(layer_txt, layer_txt.get_rect(center=(cx, 35)))
 
         # Info section
@@ -898,19 +1018,6 @@ class UIManager:
         
         pygame.draw.rect(surface, reset_btn_fill, self.reset_btn_rect, border_radius=8)
         pygame.draw.rect(surface, reset_btn_border, self.reset_btn_rect, 2, border_radius=8)
-        
-        # DEBUG: Pyro Button (top-right corner)
-        self.pyro_btn_rect = pygame.Rect(VIRTUAL_W - 140, 20, 120, 40)
-        is_pyro_hovered = self.pyro_btn_rect.collidepoint(mx, my)
-        pyro_btn_fill = (70, 70, 70) if is_pyro_hovered else (50, 50, 50)
-        
-        pygame.draw.rect(surface, pyro_btn_fill, self.pyro_btn_rect, border_radius=8)
-        pygame.draw.rect(surface, (100, 100, 100), self.pyro_btn_rect, 2, border_radius=8)
-        
-        # Render "DEBUG: PYRO" text
-        pyro_text = self.font_small.render("DEBUG: PYRO", True, (200, 200, 200))
-        pyro_text_rect = pyro_text.get_rect(center=self.pyro_btn_rect.center)
-        surface.blit(pyro_text, pyro_text_rect)
         
         reset_text = self.font_bold.render(self.game.get_text("RESET_BTN"), True, (255, 200, 200))
         surface.blit(reset_text, reset_text.get_rect(center=self.reset_btn_rect.center))
@@ -2103,3 +2210,7 @@ class UIManager:
                 self.draw_dynamic_tooltip(surface, rune_tt['title'], rune_tt['desc'], 
                                          rune_tt['mx'], rune_tt['my'], 
                                          title_color=rune_tt.get('color', ACCENT_COLOR))
+
+    def draw_overlay_elements(self, surface):
+        """Draw elements that should appear on top of everything else"""
+        self.pharaoh.draw(surface)

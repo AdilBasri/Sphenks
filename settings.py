@@ -280,7 +280,8 @@ THEMES = {
     'NEON': {'bg': (20, 15, 30), 'grid_bg': (30, 25, 40), 'line': (60, 50, 80), 'style': 'glass'},
     'RETRO': {'bg': (40, 40, 40), 'grid_bg': (0, 0, 0), 'line': (0, 255, 0), 'style': 'pixel'},
     'CRIMSON': {'bg': (30, 0, 0), 'grid_bg': (10, 0, 0), 'line': (255, 50, 50), 'style': 'pixel'}, # Yeni Dünya Teması
-    'CANDY': {'bg': (255, 240, 245), 'grid_bg': (255, 255, 255), 'line': (255, 180, 200), 'style': 'flat'}
+    'CANDY': {'bg': (255, 240, 245), 'grid_bg': (255, 255, 255), 'line': (255, 180, 200), 'style': 'flat'},
+    'TERMINAL': {'bg': (0, 0, 0), 'grid_bg': (0, 10, 0), 'line': (0, 255, 50), 'style': 'pixel'}
 }
 
 # --- VERİTABANLARI ---
@@ -324,4 +325,106 @@ BOSS_DATA = {
     'The Haze': {'desc': 'No Ghost Block', 'color': (150, 50, 150)},
     'The Drain': {'desc': 'Discard costs $3', 'color': (50, 150, 50)},
     'The Shrink': {'desc': 'Hand Size -1', 'color': (200, 100, 50)}
+}
+# settings.py dosyasının en altına yapıştır:
+
+# --- PYRO MODU / YENİ DÜNYA (ANTE 9+) AYARLARI ---
+NEW_WORLD_ANTE = 9  # Bu seviye ve sonrasında oyun modu değişir
+
+# Atmosfer Renkleri (Koyu Kırmızı/Siyah)
+COLOR_PYRO_BG = (15, 0, 5)
+COLOR_PYRO_GRID = (100, 0, 0)
+COLOR_PYRO_ACCENT = (255, 50, 50)
+
+# Düşman Ayarları
+PYRO_ENEMY_SPEED = 0.3        # Düşmanların merkeze yürüme hızı
+PYRO_SPAWN_DELAY = 120        # Kaç karede bir düşman çıkacağı (60 FPS'de ~2 sn)
+
+# --- PHARAOH DIALOGUES ---
+PHARAOH_SPEECH = {
+    'IDLE': {
+        'EN': [
+            "Work faster, mortal!", "My pyramid is waiting...", "Do you call that placement?",
+            "Less thinking, more stacking!", "Yawn...", "Are you sleeping?", "My cat plays better."
+        ],
+        'TR': [
+            "Daha hızlı çalış köle!", "Piramidim bekliyor...", "Oraya mı koydun cidden?",
+            "Az düşün çok iş yap!", "Esniyorum...", "Uyuyor musun?", "Kedim bile daha iyi oynar."
+        ],
+        'DE': [
+            "Arbeite schneller, Sterblicher!", "Meine Pyramide wartet...", "Nennst du das Platzierung?",
+            "Weniger denken, mehr stapeln!", "Gähn...", "Schläfst du?", "Meine Katze spielt besser."
+        ],
+        'ES': [
+            "¡Trabaja más rápido, mortal!", "Mi pirámide está esperando...", "¿A eso llamas colocación?",
+            "¡Menos pensar, más apilar!", "Bostezo...", "¿Estás durmiendo?", "Mi gato juega mejor."
+        ],
+        'ZH': [
+            "工作快点，凡人！", "我的金字塔在等待...", "你叫这个放置？",
+            "少想多做！", "哈欠...", "你在睡觉吗？", "我的猫都比你玩得好。"
+        ],
+        'PT': [
+            "Trabalhe mais rápido, mortal!", "Minha pirâmide está esperando...", "Você chama isso de colocação?",
+            "Menos pensar, mais empilhar!", "Bocejo...", "Você está dormindo?", "Meu gato joga melhor."
+        ],
+        'FR': [
+            "Travaille plus vite, mortel!", "Ma pyramide attend...", "Tu appelles ça un placement?",
+            "Moins réfléchir, plus empiler!", "Bâillement...", "Tu dors?", "Mon chat joue mieux."
+        ],
+        'IT': [
+            "Lavora più veloce, mortale!", "La mia piramide sta aspettando...", "La chiami questa una posizione?",
+            "Meno pensare, più impilare!", "Sbadiglio...", "Stai dormendo?", "Il mio gatto gioca meglio."
+        ]
+    },
+    'PYRO': {
+        'EN': [
+            "WHAT DID YOU DO?!", "SYSTEM FAILURE!", "ERROR 404: REALITY NOT FOUND",
+            "IT BURNS!", "DELETE THEM NOW!", "REBOOTING..."
+        ],
+        'TR': [
+            "NE YAPTIN SEN?!", "SİSTEM ÇÖKÜYOR!", "HATA 404: GERÇEKLİK YOK",
+            "YANIYOR! YANIYOR!", "SİL ONLARI ÇABUK!", "YENİDEN BAŞLATILIYOR..."
+        ],
+        'DE': [
+            "WAS HAST DU GETAN?!", "SYSTEMFEHLER!", "FEHLER 404: REALITÄT NICHT GEFUNDEN",
+            "ES BRENNT!", "LÖSCHE SIE JETZT!", "NEUSTART..."
+        ],
+        'ES': [
+            "¡¿QUÉ HICISTE?!", "¡FALLO DEL SISTEMA!", "ERROR 404: REALIDAD NO ENCONTRADA",
+            "¡ARDE!", "¡ELIMÍNALOS AHORA!", "REINICIANDO..."
+        ],
+        'ZH': [
+            "你做了什么？！", "系统故障！", "错误404：现实未找到",
+            "在燃烧！", "现在删除它们！", "重新启动中..."
+        ],
+        'PT': [
+            "O QUE VOCÊ FEZ?!", "FALHA DO SISTEMA!", "ERRO 404: REALIDADE NÃO ENCONTRADA",
+            "ESTÁ QUEIMANDO!", "DELETE-OS AGORA!", "REINICIANDO..."
+        ],
+        'FR': [
+            "QU'AS-TU FAIT?!", "DÉFAILLANCE DU SYSTÈME!", "ERREUR 404: RÉALITÉ NON TROUVÉE",
+            "ÇA BRÛLE!", "SUPPRIME-LES MAINTENANT!", "REDÉMARRAGE..."
+        ],
+        'IT': [
+            "COSA HAI FATTO?!", "GUASTO DEL SISTEMA!", "ERRORE 404: REALTÀ NON TROVATA",
+            "BRUCIA!", "ELIMINALI ORA!", "RIAVVIO..."
+        ]
+    },
+    'COMBO': {
+        'EN': ["IMPRESSIVE!", "A WORTHY OFFERING.", "THE GODS ARE PLEASED.", "DOUBLE CRUSH!", "MAGNIFICENT!"],
+        'TR': ["ETKİLEYİCİ!", "LAYIK BİR SUNU.", "TANRILAR MEMNUN.", "ÇİFTE VURUŞ!", "MÜHTEŞEM!"],
+        'DE': ["BEEINDRUCKEND!", "EIN WÜRDIGES OPFER.", "DIE GÖTTER SIND ERFREUT.", "DOPPELTER SCHLAG!", "GROSSARTIG!"],
+        'ES': ["¡IMPRESIONANTE!", "UNA OFRENDA DIGNA.", "LOS DIOSES ESTÁN COMPLACIDOS.", "¡DOBLE GOLPE!", "¡MAGNÍFICO!"],
+        'ZH': ["令人印象深刻！", "值得的祭品。", "诸神很高兴。", "双重粉碎！", "壮观！"],
+        'PT': ["IMPRESSIONANTE!", "UMA OFERENDA DIGNA.", "OS DEUSES ESTÃO SATISFEITOS.", "GOLPE DUPLO!", "MAGNÍFICO!"],
+        'FR': ["IMPRESSIONNANT!", "UNE OFFRANDE DIGNE.", "LES DIEUX SONT SATISFAITS.", "DOUBLE ÉCRASEMENT!", "MAGNIFIQUE!"],
+        'IT': ["IMPRESSIONANTE!", "UN'OFFERTA DEGNA.", "GLI DEI SONO SODDISFATTI.", "DOPPIO COLPO!", "MAGNIFICO!"]
+    }
+}
+
+PHARAOH_TUTORIAL = {
+    0: "Welcome, slave. Build my legacy.",
+    1: "Drag that block. Don't be clumsy.",
+    2: "Garbage goes to the trash. Like you.",
+    3: "Good. Now work faster."
 }
