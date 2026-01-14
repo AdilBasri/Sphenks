@@ -3,6 +3,8 @@ import pygame
 import os
 import random
 import math
+import cv2
+import numpy as np
 from settings import *
 from settings import STATE_PLAYING  # Tooltip kontrolü için
 from languages import LANGUAGES
@@ -189,119 +191,129 @@ class VoidWidget(pygame.sprite.Sprite):
 
 # --- PHARAOH ASSISTANT (Animated Character) ---
 class PharaohAssistant:
-    def __init__(self):
-        # Load spritesheet (5 frames)
-        try:
-            base_path = os.path.dirname(os.path.abspath(__file__))
-            path = os.path.join(base_path, "assets", "pharaoh.png")
-            sprite_sheet = pygame.image.load(path).convert_alpha()
-            sheet_w = sprite_sheet.get_width()
-            sheet_h = sprite_sheet.get_height()
-            frame_w = sheet_w // 5  # 5 frames
-            
-            # Split spritesheet into frames
-            self.frames = []
-            for i in range(5):
-                frame = sprite_sheet.subsurface((i * frame_w, 0, frame_w, sheet_h))
-                self.frames.append(frame)
-        except:
-            # Fallback: create simple colored squares if image not found
-            self.frames = []
-            for i in range(5):
-                surf = pygame.Surface((32, 32), pygame.SRCALPHA)
-                surf.fill((200, 150, 50, 255))  # Gold color
-                self.frames.append(surf)
-        
-        # Animation state
+    def __init__(self, game):
+        self.game = game
+        self.frames = []
         self.frame_index = 0
-        self.timer = 0  # Frame timer for animation
-        self.anim_speed = 150  # 150ms per frame
+        self.timer = 0
+        self.anim_speed = 3  # Lower is faster
         
-        # Position: Top-left, just to the right of sidebar
-        self.x = SIDEBAR_WIDTH + 25
+        # Position (Right next to the sidebar)
+        self.x = SIDEBAR_WIDTH + 20
         self.y = 65
+        self.target_size = (80, 80)
         
-        # Speech bubble system
+        # Speech System
         self.current_text = ""
         self.speech_timer = 0
-        self.speech_duration = 180  # Default duration in frames
         
+        # Load Video
+        self.load_video_assets()
+        
+    def load_video_assets(self):
+        video_path = resource_path("assets/cat.mp4")
+        if not os.path.exists(video_path):
+            print(f"Video missing: {video_path}")
+            self.create_fallback_sprite()
+            return
+            
+        try:
+            cap = cv2.VideoCapture(video_path)
+            while True:
+                ret, frame = cap.read()
+                if not ret: break
+                
+                # 1. Resize for performance
+                frame = cv2.resize(frame, self.target_size)
+                # 2. Fix Colors (BGR -> RGB)
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                
+                # 3. Remove White Background
+                lower_white = np.array([230, 230, 230], dtype=np.uint8)
+                upper_white = np.array([255, 255, 255], dtype=np.uint8)
+                mask = cv2.inRange(frame, lower_white, upper_white)
+                mask_inv = cv2.bitwise_not(mask)
+                
+                r, g, b = cv2.split(frame)
+                rgba = cv2.merge([r, g, b, mask_inv])
+                
+                # 4. Convert to Pygame Surface
+                surf = pygame.image.frombuffer(rgba.tobytes(), self.target_size, 'RGBA')
+                self.frames.append(surf.convert_alpha())
+                
+            cap.release()
+            if not self.frames: self.create_fallback_sprite()
+            
+        except Exception as e:
+            print(f"Video Error: {e}")
+            self.create_fallback_sprite()
+    
+    def create_fallback_sprite(self):
+        # Yellow square fallback if video fails
+        surf = pygame.Surface(self.target_size, pygame.SRCALPHA)
+        surf.fill((200, 150, 50, 255))
+        self.frames = [surf]
+    
     def say(self, text, duration=180):
-        """Make the Pharaoh say something"""
         self.current_text = text
         self.speech_timer = duration
-        self.speech_duration = duration
-        
+    
     def update(self):
-        """Update animation and speech timer"""
-        # Update speech timer
+        # Handle Speech Timer
+        is_talking = False
         if self.speech_timer > 0:
             self.speech_timer -= 1
+            is_talking = True
             if self.speech_timer <= 0:
                 self.current_text = ""
-            
-            # Animate when speaking
-            self.timer += 1
-            if self.timer > 10:
-                self.timer = 0
-                if self.frames:
-                    self.frame_index = (self.frame_index + 1) % len(self.frames)
-        else:
-            # Reset to idle frame (first frame) when silent
-            self.frame_index = 0
-            self.timer = 0
-    
-    def draw(self, surface):
-        """Draw the Pharaoh sprite and speech bubble"""
-        # Draw current animation frame
-        current_frame = self.frames[self.frame_index]
-        frame_rect = current_frame.get_rect(center=(self.x, self.y))
-        surface.blit(current_frame, frame_rect)
         
-        # Draw speech bubble if speaking
+        # --- ANIMATION LOGIC ---
+        # Animate IF: (Cat is Talking) OR (Score >= 2000)
+        should_animate = is_talking or (getattr(self.game, 'score', 0) >= 2000)
+        
+        if should_animate and self.frames:
+            self.timer += 1
+            if self.timer >= self.anim_speed:
+                self.timer = 0
+                self.frame_index = (self.frame_index + 1) % len(self.frames)
+        else:
+            # Reset to first frame (idle)
+            self.frame_index = 0
+    def draw(self, surface):
+        # Draw Cat
+        if self.frames:
+            surface.blit(self.frames[self.frame_index], (self.x, self.y))
+            
+        # Draw Speech Bubble
         if self.current_text and self.speech_timer > 0:
             self._draw_speech_bubble(surface)
-    
+        
     def _draw_speech_bubble(self, surface):
-        """Draw speech bubble with auto-resizing (appears to the RIGHT)"""
-        # Create font for speech text
+        # Keep existing bubble logic, but point it near the cat
         font = pygame.font.SysFont("Arial", 12, bold=True)
+        lines = self.current_text.split('\n')
         
-        # Render text to get dimensions
-        text_surf = font.render(self.current_text, True, (0, 0, 0))
-        text_w = text_surf.get_width()
-        text_h = text_surf.get_height()
-        
-        # Bubble padding
+        max_w = 0
+        total_h = 0
+        rendered = []
+        for line in lines:
+            s = font.render(line, True, (0,0,0))
+            if s.get_width() > max_w: max_w = s.get_width()
+            total_h += s.get_height() + 2
+            rendered.append(s)
+            
         padding = 8
-        bubble_w = text_w + padding * 2
-        bubble_h = text_h + padding * 2
+        bx = self.x + 75
+        by = self.y
+        rect = pygame.Rect(bx, by, max_w + padding*2, total_h + padding*2)
         
-        # Position bubble to the RIGHT of Pharaoh
-        bubble_x = self.x + 50  # To the right
-        bubble_y = self.y - bubble_h // 2  # Centered vertically
+        pygame.draw.rect(surface, (255, 255, 255), rect, border_radius=8)
+        pygame.draw.rect(surface, (0, 0, 0), rect, 2, border_radius=8)
         
-        # Ensure bubble stays on screen
-        bubble_x = max(5, min(bubble_x, VIRTUAL_W - bubble_w - 5))
-        bubble_y = max(5, bubble_y)
-        
-        # Draw bubble background (rounded rectangle)
-        bubble_rect = pygame.Rect(bubble_x, bubble_y, bubble_w, bubble_h)
-        pygame.draw.rect(surface, (255, 255, 255), bubble_rect, border_radius=8)
-        pygame.draw.rect(surface, (0, 0, 0), bubble_rect, 2, border_radius=8)
-        
-        # Draw small triangle pointing LEFT to character
-        triangle_tip = (self.x + 35, self.y)  # Point at character
-        triangle_top = (bubble_x, bubble_y + bubble_h // 2 - 8)
-        triangle_bottom = (bubble_x, bubble_y + bubble_h // 2 + 8)
-        pygame.draw.polygon(surface, (255, 255, 255), [triangle_tip, triangle_top, triangle_bottom])
-        pygame.draw.line(surface, (0, 0, 0), triangle_top, triangle_tip, 2)
-        pygame.draw.line(surface, (0, 0, 0), triangle_bottom, triangle_tip, 2)
-        
-        # Draw text centered in bubble
-        text_x = bubble_x + padding
-        text_y = bubble_y + padding
-        surface.blit(text_surf, (text_x, text_y))
+        curr_y = by + padding
+        for s in rendered:
+            surface.blit(s, (bx + padding, curr_y))
+            curr_y += s.get_height() + 2
 
 
 class UIManager:
@@ -316,7 +328,7 @@ class UIManager:
         self.refresh_fonts()
         
         self.void_widget = VoidWidget(VIRTUAL_W - 20, VIRTUAL_H - 20, scale=0.8)
-        self.pharaoh = PharaohAssistant()
+        self.pharaoh = PharaohAssistant(self.game)
         self.bg_tiles = []
         self.tile_w = 0; self.tile_h = 0
         self.ra_frames = []; self.symbol_images = []
