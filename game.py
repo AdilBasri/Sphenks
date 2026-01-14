@@ -80,7 +80,8 @@ class Game:
         self.high_score = self.save_manager.data.get('high_score', 0)
         self.screen_shake = 0
         self.scoring_data = {'base': 0, 'mult': 0, 'total': 0}
-        self.fullscreen = False
+        # Apply saved fullscreen preference loaded earlier
+        self.fullscreen = bool(saved_fullscreen)
         self.theme = 'NEON'
 
         # Language / font setup with saved preference and safety fallback
@@ -93,8 +94,13 @@ class Game:
         self.font_size_offset = lang_meta.get('size_offset', 0)
 
         # Display / systems
-        # Always start windowed; fullscreen is applied via a late toggle
+        # Start with saved fullscreen preference applied to flags
         flags = pygame.SCALED | pygame.RESIZABLE
+        if getattr(self, 'fullscreen', False):
+            try:
+                flags |= pygame.FULLSCREEN
+            except Exception:
+                pass
         self.screen = pygame.display.set_mode((VIRTUAL_W, VIRTUAL_H), flags, vsync=1)
         pygame.display.set_caption(TITLE)
         self.clock = pygame.time.Clock()
@@ -789,11 +795,12 @@ class Game:
     def handle_events(self):
         # Note: Do not discard events during cooldown; gate actions instead
         
-        # Get mouse position directly - no coordinate conversion needed
-        self.mouse_x, self.mouse_y = pygame.mouse.get_pos()
-        mx, my = self.mouse_x, self.mouse_y
+        # NOTE: Use event.pos for mouse coordinates (Retina accuracy).
+        # Do NOT call pygame.event.get() more than once per frame.
         
         for event in pygame.event.get():
+            # Default mouse position (fallback). Prefer `event.pos` when present.
+            mx, my = pygame.mouse.get_pos()
             if event.type == pygame.QUIT: sys.exit()
             
             # Handle window resize with automatic scaling
@@ -826,6 +833,7 @@ class Game:
                 # Handle reset confirmation first (if active)
                 if self.show_reset_confirm:
                     if event.type == pygame.MOUSEBUTTONDOWN:
+                        mx, my = event.pos
                         if hasattr(self.ui, 'reset_confirm_buttons'):
                             yes_btn = self.ui.reset_confirm_buttons['YES']
                             no_btn = self.ui.reset_confirm_buttons['NO']
@@ -885,6 +893,7 @@ class Game:
 
             elif self.state == STATE_ROUND_SELECT:
                 if event.type == pygame.MOUSEBUTTONDOWN:
+                    mx, my = event.pos
                     if hasattr(self.ui, 'select_buttons'):
                         for btn in self.ui.select_buttons:
                             if btn.collidepoint(mx, my) and self.input_cooldown == 0:
@@ -892,6 +901,7 @@ class Game:
 
             elif self.state == STATE_PAUSE:
                 if event.type == pygame.MOUSEBUTTONDOWN:
+                    mx, my = event.pos
                     if hasattr(self.ui, 'pause_buttons'):
                         yes = self.ui.pause_buttons['YES']
                         no = self.ui.pause_buttons['NO']
@@ -904,6 +914,7 @@ class Game:
             
             elif self.state == STATE_COMING_SOON:
                 if event.type == pygame.MOUSEBUTTONDOWN:
+                    mx, my = event.pos
                     if hasattr(self.ui, 'coming_soon_back_btn'):
                         if self.ui.coming_soon_back_btn.collidepoint(mx, my) and self.input_cooldown == 0:
                             self.audio.play('select')
@@ -927,6 +938,7 @@ class Game:
 
                 # 1. Right Click (Defense Step ONLY)
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
+                    mx, my = event.pos
                     if self.tutorial_step == 6 and getattr(self, 'tutorial_enemy', None):
                         if self.tutorial_enemy['rect'].collidepoint(mx, my):
                             try: self.audio.play('explode')
@@ -939,9 +951,10 @@ class Game:
 
                 # 2. Left Click (Progression and Dragging)
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    # Check input cooldown first!
+                    mx, my = event.pos
+                    # Preserve tutorial cooldown gating to avoid ghost clicks
                     if self.input_cooldown > 0:
-                        return
+                        continue
                     item_clicked = False
                     # Check Runes
                     for r in self.consumables:
@@ -988,6 +1001,7 @@ class Game:
 
                 # 3. Mouse Release (Drop Logic)
                 if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                    mx, my = event.pos
                     if self.held_rune and self.held_rune.dragging:
                         applied = False
                         for b in self.blocks:
@@ -1057,6 +1071,7 @@ class Game:
                         self.flip_held_block()
                 
                 if event.type == pygame.MOUSEBUTTONDOWN:
+                    mx, my = event.pos
                     if hasattr(self, 'menu_btn_rect') and self.menu_btn_rect.collidepoint(mx, my) and self.input_cooldown == 0:
                         self.state = STATE_PAUSE
                     if event.button == 1: 
@@ -1082,6 +1097,7 @@ class Game:
                     elif event.button == 2 and self.held_block: self.held_block.flip()
 
                 elif event.type == pygame.MOUSEBUTTONUP:
+                    mx, my = event.pos
 
                     if event.button == 3 and (self.round == 3 or self.ante >= NEW_WORLD_ANTE):
                         hit = False
@@ -1280,6 +1296,7 @@ class Game:
 
             elif self.state == STATE_SHOP:
                 if event.type == pygame.MOUSEBUTTONDOWN:
+                    mx, my = event.pos
                     if self.input_cooldown > 0:
                         continue
                     for t in self.shop_totems:
@@ -1292,6 +1309,7 @@ class Game:
             
             elif self.state == STATE_DEBT:
                 if event.type == pygame.MOUSEBUTTONDOWN:
+                    mx, my = event.pos
                     # Check if continue button was clicked (handled by UI)
                     if hasattr(self.ui, 'debt_continue_button'):
                         if self.ui.debt_continue_button.collidepoint(mx, my) and self.input_cooldown == 0:
@@ -1302,6 +1320,7 @@ class Game:
             
             elif self.state == STATE_DEMO_END:
                 if event.type == pygame.MOUSEBUTTONDOWN:
+                    mx, my = event.pos
                     # Check if endless mode button was clicked
                     if hasattr(self.ui, 'demo_end_button'):
                         if self.ui.demo_end_button.collidepoint(mx, my) and self.input_cooldown == 0:
@@ -1311,6 +1330,7 @@ class Game:
             
             elif self.state == STATE_COLLECTION:
                 if event.type == pygame.MOUSEBUTTONDOWN:
+                    mx, my = event.pos
                     # Check if back button was clicked
                     if hasattr(self.ui, 'collection_back_button'):
                         if self.ui.collection_back_button.collidepoint(mx, my) and self.input_cooldown == 0:
@@ -1329,6 +1349,7 @@ class Game:
             
             elif self.state == STATE_SETTINGS:
                 if event.type == pygame.MOUSEBUTTONDOWN and hasattr(self.ui, 'settings_buttons'):
+                    mx, my = event.pos
                     if self.input_cooldown > 0:
                         continue
                     btns = self.ui.settings_buttons
@@ -1630,15 +1651,9 @@ class Game:
             if getattr(self, 'tutorial_active', True):
                 self.ui.draw_training_overlay(self.screen, self, self.tutorial_step)
             # F. Dragged Items
-            self._draw_dragged_items(theme)
-            # DRAW DRAGGED RUNE (Fix for vanishing rune)
-            if self.held_rune and getattr(self.held_rune, 'dragging', False):
-                rx, ry = self.mouse_x, self.mouse_y
-                pygame.draw.circle(self.screen, (20, 20, 30), (rx, ry), 24)
-                pygame.draw.circle(self.screen, self.held_rune.color, (rx, ry), 22, 3)
-                font = pygame.font.SysFont("Arial", 22, bold=True)
-                txt = font.render(self.held_rune.icon, True, self.held_rune.color)
-                self.screen.blit(txt, txt.get_rect(center=(rx, ry)))
+            # F. Dragged Items (draw order unified at end)
+            # NOTE: actual drawing of dragged items (held_block / held_rune)
+            # is handled after the state switch to ensure they render on top.
         # --- PLAYING / SCORING / PYRO ---
         elif self.state in [STATE_PLAYING, STATE_SCORING, STATE_PYRO, STATE_PYRO_DEATH, STATE_LEVEL_COMPLETE, STATE_GAME_OVER]:
             # Standard Game Loop Drawing
@@ -1662,6 +1677,45 @@ class Game:
         if self.state in [STATE_PLAYING, STATE_SCORING, STATE_TRAINING]:
             self.ui.draw_overlay_elements(self.screen)
 
+        # --- Draw dragged items on top of everything ---
+        try:
+            mx, my = pygame.mouse.get_pos()
+            theme = None
+            try:
+                theme = self.get_current_theme()
+            except Exception:
+                theme = None
+
+            # Held block dragging (draw above all layers)
+            if hasattr(self, 'held_block') and self.held_block and getattr(self.held_block, 'dragging', False):
+                hb = self.held_block
+                ox = getattr(hb, 'offset_x', 0)
+                oy = getattr(hb, 'offset_y', 0)
+                cur_x = mx - ox
+                cur_y = my - oy
+                try:
+                    hb.draw(self.screen, cur_x, cur_y, 1.0, 255, theme['style'] if theme else 'default')
+                except Exception:
+                    try:
+                        hb.draw(self.screen, cur_x, cur_y, 1.0, 255, 'default')
+                    except Exception:
+                        pass
+
+            # Held rune dragging (draw above all layers)
+            if hasattr(self, 'held_rune') and self.held_rune and getattr(self.held_rune, 'dragging', False):
+                rx, ry = mx, my
+                try:
+                    pygame.draw.circle(self.screen, (20, 20, 30), (rx, ry), 24)
+                    pygame.draw.circle(self.screen, self.held_rune.color, (rx, ry), 22, 3)
+                    font = pygame.font.SysFont("Arial", 22, bold=True)
+                    txt = font.render(self.held_rune.icon, True, self.held_rune.color)
+                    self.screen.blit(txt, txt.get_rect(center=(rx, ry)))
+                except Exception:
+                    pass
+
+        except Exception:
+            pass
+
         pygame.display.flip()
 
     # Helper to prevent duplication
@@ -1684,23 +1738,40 @@ class Game:
 
     def _draw_dragged_items(self, theme):
         if self.held_block and self.held_block.dragging:
-            cur_x = self.mouse_x - self.held_block.offset_x
-            cur_y = self.mouse_y - self.held_block.offset_y
-            self.held_block.draw(self.screen, cur_x, cur_y, 1.0, 255, theme['style'])
+            try:
+                mx, my = pygame.mouse.get_pos()
+            except Exception:
+                mx, my = 0, 0
+            cur_x = mx - getattr(self.held_block, 'offset_x', 0)
+            cur_y = my - getattr(self.held_block, 'offset_y', 0)
+            try:
+                self.held_block.draw(self.screen, cur_x, cur_y, 1.0, 255, theme['style'])
+            except Exception:
+                try:
+                    self.held_block.draw(self.screen, cur_x, cur_y, 1.0, 255, 'default')
+                except Exception:
+                    pass
 
     def _draw_gameplay_elements(self):
         theme = self.get_current_theme()
         self.particle_system.atmosphere.get_shake_offset() # Tick shake
         self.grid.draw(self.screen, theme)
         
-        # Pyro Enemies (Round 3)
+        # --- PYRO ATMOSPHERE (Round 3 Only) ---
         if self.round == 3 and self.state in [STATE_PLAYING, STATE_SCORING]:
+            # 1. Dark Red Vignette/Overlay (pulsing)
+            pyro_overlay = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+            pulse = (math.sin(pygame.time.get_ticks() * 0.003) + 1) * 0.5 * 20 + 30
+            pyro_overlay.fill((50, 0, 0, int(pulse)))
+            self.screen.blit(pyro_overlay, (0, 0))
+
+            # 2. Draw Pyro Enemies (if they exist in list)
             for enemy in self.enemies:
                 ex, ey = enemy['rect'].center
-                pygame.draw.circle(self.screen, (0,0,0), (ex+2, ey+2), 16)
-                pygame.draw.circle(self.screen, (150,0,0), (ex, ey), 15)
-                pygame.draw.circle(self.screen, (255,255,255), (ex, ey), 10)
-                pygame.draw.circle(self.screen, (0,0,0), (ex, ey), 4)
+                # Draw simple enemy visual if sprite missing
+                pygame.draw.circle(self.screen, (0,0,0), (ex+2, ey+2), 16) # Shadow
+                pygame.draw.circle(self.screen, (180,20,20), (ex, ey), 15) # Red Body
+                pygame.draw.circle(self.screen, (255,255,255), (ex, ey), 5) # Eye
         self.ui.draw_sidebar(self.screen, self)
         self.ui.draw_hand_bg(self.screen)
         self.ui.draw_top_bar(self.screen, self)
