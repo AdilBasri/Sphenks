@@ -1,10 +1,10 @@
 {
     "total_debt": 1000000,
-    "debt_paid": 1003317,
+    "debt_paid": 1137874,
     "unlocked_items": [
         "freedom"
     ],
-    "tutorial_complete": false,
+    "tutorial_complete": true,
     "settings": {
         "fullscreen": true,
         "volume": 0.0975,

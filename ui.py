@@ -698,6 +698,13 @@ class UIManager:
         flip_text = f"[E] {self.game.get_text('LBL_FLIP')}"
         flip_txt = self.font_small.render(flip_text, True, (255, 200, 50))
         surface.blit(flip_txt, (control_x + 18, control_icon_y - 1))
+        # Show shoot hint during training step 6
+        if game.state == STATE_TRAINING and getattr(game, 'tutorial_step', None) == 6:
+            control_icon_y += 15
+            self.draw_mouse_icon(surface, control_x, control_icon_y, highlight='right', size=10)
+            shoot_text = f"[{self.game.get_text('LBL_R_CLICK')}] {self.game.get_text('LBL_SHOOT')}"
+            shoot_txt = self.font_small.render(shoot_text, True, (220, 60, 60))
+            surface.blit(shoot_txt, (control_x + 18, control_icon_y - 1))
         
         # Quota value (CENTERED, pushed down to avoid control hints)
         y_cursor += 32  # Push down to clear control hints
@@ -1296,13 +1303,14 @@ class UIManager:
 
         # Localized keys per tutorial step
         step_keys = {
-            0: ("TUT_STEP0_TITLE", "TUT_STEP0_MSG"),
-            1: ("TUT_STEP1_TITLE", "TUT_STEP1_MSG"),
-            2: ("TUT_STEP2_TITLE", "TUT_STEP2_MSG"),
-            3: ("TUT_STEP3_TITLE", "TUT_STEP3_MSG"),
-            4: ("TUT_STEP4_TITLE", "TUT_STEP4_MSG"),
-            5: ("TUT_STEP5_TITLE", "TUT_STEP5_MSG"),
-            6: ("TUT_STEP6_TITLE", "TUT_STEP6_MSG"),
+            0: ("TUT_STEP0_TITLE", "TUT_STEP0_MSG"), # Intro
+            1: ("TUT_STEP1_TITLE", "TUT_STEP1_MSG"), # Controls
+            2: ("TUT_STEP2_TITLE", "TUT_STEP2_MSG"), # Place
+            3: ("TUT_STEP3_TITLE", "TUT_STEP3_MSG"), # Trash
+            4: ("TUT_STEP4_TITLE", "TUT_STEP4_MSG"), # Reroll/Rune Intro
+            5: ("TUT_STEP5_TITLE", "TUT_STEP5_MSG"), # Apply Rune
+            6: ("TUT_STEP6_TITLE", "TUT_STEP6_MSG"), # DEFENSE (Pyro)
+            7: ("TUT_STEP7_TITLE", "TUT_STEP7_MSG"), # READY (Finish)
         }
 
         def step_text(step_id):
@@ -1358,6 +1366,13 @@ class UIManager:
                 'title': step_text(6)[0],
                 'text': step_text(6)[1],
                 'highlight': None,
+                'show_continue': False,
+                'condition_text': None
+            },
+            7: {
+                'title': step_text(7)[0],
+                'text': step_text(7)[1],
+                'highlight': None,
                 'show_continue': True,
                 'condition_text': None
             }
@@ -1398,7 +1413,7 @@ class UIManager:
         surface.blit(title, title_rect)
         
         # Step indicator
-        step_text = self.font_small.render(f"Step {step + 1}/7", True, (150, 150, 150))
+        step_text = self.font_small.render(f"Step {step + 1}/8", True, (150, 150, 150))
         step_rect = step_text.get_rect(centerx=panel_rect.centerx, top=title_rect.bottom + 5)
         surface.blit(step_text, step_rect)
         

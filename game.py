@@ -111,6 +111,9 @@ class Game:
         self.pyro_spawn_timer = 0
         self.pyro_flash_timer = 0 # Hasar alınca ekranın kızarması için
         self.pharaoh_timer = 0  # Pharaoh dialogue timer
+        # Tutorial-specific state (safety defaults)
+        self.tutorial_step = 0
+        self.tutorial_enemy = None
         try:
             # Crosshair (Nişangah) yükle, yoksa None kalsın (draw'da çizeriz)
             self.crosshair_img = pygame.image.load(resource_path('assets/crosshair.png')).convert_alpha()
@@ -186,6 +189,54 @@ class Game:
                 self.trigger_pyro_death()
                 return
 
+    def trigger_pyro_death(self):
+        """Handle player death when Pyro enemies reach the core.
+        Sets the game to the pyro-death state, clears enemies, and
+        triggers audio/visual feedback.
+        """
+        try:
+            # Clear enemy state
+            self.enemies.clear()
+        except Exception:
+            pass
+        try:
+            self.tutorial_enemy = None
+        except Exception:
+            pass
+
+        # Reset spawn timers and effects
+        self.pyro_spawn_timer = 0
+        self.pyro_flash_timer = 30
+        self.screen_shake = max(getattr(self, 'screen_shake', 0), 12)
+
+        # Select a dramatic quote if available
+        try:
+            import random as _rand
+            if 'PHARAOH_QUOTES' in globals() and PHARAOH_QUOTES:
+                self.current_death_quote = _rand.choice(PHARAOH_QUOTES)
+            else:
+                self.current_death_quote = self.get_text('PHARAOH_1') if hasattr(self, 'get_text') else "You died."
+        except Exception:
+            self.current_death_quote = "You died."
+
+        # Play sound and particles where possible
+        try:
+            if hasattr(self, 'audio'):
+                self.audio.play('explode')
+        except Exception:
+            pass
+        try:
+            if hasattr(self, 'particle_system'):
+                self.particle_system.create_text(self.w//2, self.h//2, self.current_death_quote, (255, 80, 80), font_path=self.font_name)
+        except Exception:
+            pass
+
+        # Enter pyro death state (UI will draw the death screen)
+        self.state = STATE_PYRO_DEATH
+        # Short cooldown to avoid immediate clicks
+        self.input_cooldown = 30
+        return
+
     def get_text(self, key):
         """Return localized text for current language, fallback to key."""
         lang_pack = LANGUAGES.get(self.current_language, LANGUAGES.get(DEFAULT_LANGUAGE, {}))
@@ -235,36 +286,41 @@ class Game:
             self.audio.play('select')
 
     def init_tutorial_mode(self):
-        """Initialize the tutorial with a simple setup for learning"""
-        # Reset tutorial progress
         self.tutorial_step = 0
-        self.tutorial_key_pressed = False  # Track if player pressed R or E in step 1
-        self.tutorial_rune_applied = False  # Track if player applied rune in step 4
-        self.tutorial_active = True  # Overlay and step gating flag
-        
-        # Give player some simple blocks to start
+        self.input_cooldown = 20
+        self.tutorial_key_pressed = False
+        self.tutorial_rune_applied = False
+        self.tutorial_active = True
+        self.tutorial_enemy = None # Reset enemy
+
+        # Reset Grid & Hand
         self.grid.reset()
         self.blocks = []
         self.held_block = None
-        
-        # Add 3 simple blocks to hand
-        tutorial_shapes = ['I', 'DOT', 'L']  # Simple shapes for learning
+        self.held_rune = None
+
+        # Create Blocks
+        tutorial_shapes = ['I', 'DOT', 'L']
         for shape in tutorial_shapes:
             self.blocks.append(Block(shape))
-        # Ensure hand is topped up in case this is re-entered
-        while len(self.blocks) < 3:
-            self.blocks.append(Block(random.choice(tutorial_shapes)))
-        
         self.position_blocks_in_hand()
-        
-        # Set up simple game state
+
+        # --- CRITICAL FIX: SPAWN RUNE ---
+        from runes import Rune
+        self.consumables = [] # Clear old
+        # Create a Rune manually
+        r = Rune('rune_fire')
+        # Set position explicitly
+        r.x = SIDEBAR_WIDTH + 20
+        r.y = 60
+        r.dragging = False
+        r.rect = pygame.Rect(r.x, r.y, 40, 40)
+        self.consumables.append(r)
+
+        # Game Params
         self.score = 0
-        self.visual_score = 0
-        self.void_count = 20  # Plenty for tutorial
-        self.combo_counter = 0
-        self.level_target = 100  # Tutorial target (not enforced)
-        self.consumables = []  # No runes initially (spawned in step 3)
-        self.credits = max(self.credits, 50)  # Ensure the player has spending power for demos
+        self.credits = 100
+        self.void_count = 20
 
     def _spawn_tutorial_rune(self):
         """Spawn a single demo rune for tutorial steps."""
@@ -349,49 +405,63 @@ class Game:
         self.refill_hand()
 
     def start_pyro_mode(self):
-        """Start Pyro Mode (1-bit puzzle defense)"""
-        self.audio.play('select')
-        self.state = STATE_PYRO
-        self.pyro_manager.start_level(1)
-        # Stop current music for minimal Pyro theme
-        pygame.mixer.music.stop()
+        self.tutorial_step = 0
+        self.input_cooldown = 20
+        self.tutorial_active = True
+        self.tutorial_enemy = None
 
-    def trigger_pyro_death(self):
-        """Handle Pyro Mode death/failure without ending run"""
-        self.state = STATE_PYRO_DEATH
-        self.audio.play('gameover')
-        # Select random death quote from current language
-        lang = getattr(self, 'current_language', 'EN')
-        death_quotes = DEATH_QUOTES.get(lang, DEATH_QUOTES.get('EN', ["..."]))
-        self.current_death_quote = random.choice(death_quotes)
+        # Reset Grid & Hand
+        self.grid.reset()
+        self.blocks = []
+        self.held_block = None
+        self.held_rune = None
 
-    def get_smart_block_key(self):
-        keys = list(SHAPES.keys())
-        empty_cells = 0
-        for r in range(GRID_SIZE):
-            for c in range(GRID_SIZE):
-                if self.grid.grid[r][c] is None: empty_cells += 1
-        weights = {k: 10 for k in keys}
-        if empty_cells < (GRID_SIZE * GRID_SIZE * 0.3):
-            weights['DOT'] += 30; weights['I'] += 10; weights['O'] -= 5; weights['J'] -= 5; weights['L'] -= 5
-        population = list(weights.keys())
-        w_list = [max(1, weights[k]) for k in population]
-        return random.choices(population, weights=w_list, k=1)[0]
+        # Create Blocks
+        tutorial_shapes = ['I', 'DOT', 'L']
+        for shape in tutorial_shapes:
+            self.blocks.append(Block(shape))
+        self.position_blocks_in_hand()
+
+        # --- CRITICAL FIX: SPAWN RUNE ---
+        from runes import Rune
+        self.consumables = []
+        r = Rune('rune_fire')
+        r.x = SIDEBAR_WIDTH + 20
+        r.y = 60
+        r.rect = pygame.Rect(r.x, r.y, 40, 40)
+        self.consumables.append(r)
+
+        # Game Params
+        self.score = 0
+        self.credits = 100
+        self.void_count = 20
 
     def refill_hand(self):
-        if not self.blocks and self.void_count > 0:
-            max_hand = 3
-            if self.active_boss_effect == 'The Shrink': max_hand = 2
-            
-            count = min(max_hand, self.void_count)
-            for _ in range(count):
-                shape = self.get_smart_block_key()
-                self.blocks.append(Block(shape))
-                self.void_count -= 1
-            self.position_blocks_in_hand()
-            
-        elif not self.blocks and self.void_count == 0:
+        max_hand = 3
+        if self.active_boss_effect == 'The Shrink': max_hand = 2
+        # Top up hand to max_hand instead of blindly appending
+        to_add = max(0, max_hand - len(self.blocks))
+        to_add = min(to_add, self.void_count)
+        for _ in range(to_add):
+            shape = self.get_smart_block_key()
+            self.blocks.append(Block(shape))
+            self.void_count -= 1
+        self.position_blocks_in_hand()
+        
+        if not self.blocks and self.void_count == 0:
             self.check_round_end()
+
+    def get_smart_block_key(self):
+        """Return a sensible block key. Falls back to random SHAPES key."""
+        try:
+            base_choices = ['I', 'DOT', 'L', 'T', 'S', 'Z', 'J', 'O']
+            # Prefer defined shapes that exist in SHAPES
+            valid = [k for k in base_choices if k in SHAPES]
+            if valid:
+                return random.choice(valid)
+            return random.choice(list(SHAPES.keys()))
+        except Exception:
+            return random.choice(list(SHAPES.keys()))
 
     def check_round_end(self):
         if self.score >= self.level_target:
@@ -593,7 +663,8 @@ class Game:
                 b.rect.x = target_x
                 b.rect.y = target_y
                 b.original_pos = (target_x, target_y)
-                if b.visual_x == 0 and b.visual_y == 0:
+                # Always snap visual position for non-dragging blocks to avoid stray visuals
+                if not getattr(b, 'dragging', False):
                     b.visual_x = target_x
                     b.visual_y = target_y
 
@@ -846,62 +917,79 @@ class Game:
                         if self.tutorial_step == 1:
                             self.tutorial_key_pressed = True
                             self.tutorial_step = 2
-                            self.audio.play('select')
+                            try: self.audio.play('select')
+                            except Exception: pass
                         if self.held_block:
                             if event.key == pygame.K_r:
                                 self.rotate_held_block()
                             elif event.key == pygame.K_e:
                                 self.flip_held_block()
 
-                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    rune_clicked = False
-                    block_clicked = False
+                # 1. Right Click (Defense Step ONLY)
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
+                    if self.tutorial_step == 6 and getattr(self, 'tutorial_enemy', None):
+                        if self.tutorial_enemy['rect'].collidepoint(mx, my):
+                            try: self.audio.play('explode')
+                            except Exception: pass
+                            try: self.particle_system.create_explosion(mx, my, count=20)
+                            except Exception: pass
+                            self.tutorial_enemy = None
+                            self.tutorial_step = 7
+                            self.input_cooldown = 20
 
-                    # Allow rune pickup when available
+                # 2. Left Click (Progression and Dragging)
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    # Check input cooldown first!
+                    if self.input_cooldown > 0:
+                        return
+                    item_clicked = False
+                    # Check Runes
                     for r in self.consumables:
-                        if r.rect and r.rect.collidepoint(mx, my):
+                        if getattr(r, 'rect', None) and r.rect.collidepoint(mx, my):
                             self.held_rune = r
-                            r.dragging = True
-                            self.audio.play('select')
-                            rune_clicked = True
+                            self.held_rune.dragging = True
+                            item_clicked = True
+                            try: self.audio.play('select')
+                            except Exception: pass
                             break
-                    
-                    if not rune_clicked:
+                    # Check Blocks
+                    if not item_clicked:
                         for b in self.blocks:
                             if b.rect.collidepoint(mx, my):
-                                self.held_block = b
-                                b.dragging = True
-                                b.offset_x = mx - b.rect.x
-                                b.offset_y = my - b.rect.y
+                                self.held_block = b; self.held_block.dragging = True
+                                # Use visual offsets for consistency with drawing
+                                self.held_block.offset_x = mx - b.visual_x; self.held_block.offset_y = my - b.visual_y
                                 self.audio.play('select')
-                                block_clicked = True
-                                break
+                                item_clicked = True; break
 
-                    # Step progression clicks (only when no pickup happened)
-                    if not rune_clicked and not block_clicked:
-                        if self.tutorial_step == 0:
-                            self.audio.play('select')
-                            self.tutorial_step = 1
-                        elif self.tutorial_step == 1:
-                            self.audio.play('select')
-                            self.tutorial_step = 2
-                        elif self.tutorial_step == 3:
-                            self.audio.play('select')
-                            self.tutorial_step = 4
-                        elif self.tutorial_step == 4:
-                            self.audio.play('select')
-                            self.tutorial_step = 5
-                            if len(self.consumables) == 0:
-                                self._spawn_tutorial_rune()
-                        elif self.tutorial_step == 6:
-                            self.audio.play('select')
+                    # -- STEP PROGRESSION (Only if NOT dragging an item) --
+                    if not item_clicked:
+                        # Steps 0-4: click anywhere to advance
+                        if self.tutorial_step in [0, 1, 2, 3, 4]:
+                            self.tutorial_step += 1
+                            self.input_cooldown = 20
+                            try: self.audio.play('select')
+                            except Exception: pass
+                        # Step 5: Do NOT advance on click (handled on MOUSEBUTTONUP)
+                        # Step 6: Do NOT advance on Left Click (handled by Right Click)
+                        # Step 7: Click to Finish and return to menu
+                        elif self.tutorial_step == 7:
+                            try:
+                                self.save_manager.data['tutorial_complete'] = True
+                                self.save_manager.save_data()
+                            except Exception:
+                                pass
+                            try: self.audio.play('select')
+                            except Exception: pass
                             self.state = STATE_MENU
-                            self.init_game_session_data()
-                            self.input_cooldown = 10
+                            self.tutorial_active = False
+                            # Long cooldown to avoid ghost-clicking UI buttons right after tutorial
+                            self.input_cooldown = 60
 
+                # 3. Mouse Release (Drop Logic)
                 if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-                    # Rune drop handling first (apply to block cell)
                     if self.held_rune and self.held_rune.dragging:
+                        applied = False
                         for b in self.blocks:
                             if b.rect.collidepoint(mx, my):
                                 rel_x = mx - b.visual_x
@@ -913,22 +1001,22 @@ class Game:
                                         b.runes[(cell_row, cell_col)] = self.held_rune
                                         if self.held_rune in self.consumables:
                                             self.consumables.remove(self.held_rune)
-                                        self.tutorial_rune_applied = True
-                                        self.audio.play('select')
+                                        applied = True
+                                        try: self.audio.play('select')
+                                        except Exception: pass
                                         break
-                        self.held_rune.dragging = False
+                        if applied and self.tutorial_step == 5:
+                            self.tutorial_rune_applied = True
+                            self.tutorial_step = 6
+                            self.input_cooldown = 20
                         self.held_rune = None
 
-                    # Block drop handling
                     if self.held_block:
+                        # Handle trash discard or place logic
                         if self.tutorial_step == 2 and self.trash_rect.collidepoint(mx, my):
-                            # Tutorial discard: recycle hand immediately and advance
-                            # Strict order to prevent visual glitches:
                             self.held_block.dragging = False
                             self.held_block = None
                             self.blocks.clear()
-                            
-                            # Top the hand back up for the next step
                             tutorial_shapes = ['I', 'DOT', 'L']
                             while len(self.blocks) < 3:
                                 try:
@@ -936,9 +1024,9 @@ class Game:
                                 except Exception:
                                     new_shape = random.choice(tutorial_shapes)
                                 self.blocks.append(Block(new_shape))
-                            
                             self.position_blocks_in_hand()
-                            self.audio.play('select')
+                            try: self.audio.play('select')
+                            except Exception: pass
                             self.tutorial_step = 3
                             return
                         else:
@@ -947,12 +1035,12 @@ class Game:
                             check_x = cur_x + (TILE_SIZE / 2)
                             check_y = cur_y + (TILE_SIZE / 2)
                             gr, gc = self.get_grid_pos(check_x, check_y)
-                            
                             if gr is not None and gc is not None and self.grid.is_valid_position(self.held_block, gr, gc):
                                 self.grid.place_block(self.held_block, gr, gc)
                                 if self.held_block in self.blocks:
                                     self.blocks.remove(self.held_block)
-                                self.audio.play('place')
+                                try: self.audio.play('place')
+                                except Exception: pass
                                 self.held_block = None
                             else:
                                 self.held_block.dragging = False
@@ -1375,6 +1463,48 @@ class Game:
                 self.tutorial_rune_applied = False
                 self.audio.play('select')
 
+            # Step 6: Defense tutorial enemy logic
+            if self.tutorial_step == 6:
+                # Ensure a tutorial rune exists in the sidebar for practice
+                if not getattr(self, 'consumables', None) or len(self.consumables) == 0:
+                    try:
+                        self._spawn_tutorial_rune()
+                    except Exception:
+                        pass
+                center_x, center_y = VIRTUAL_W // 2, VIRTUAL_H // 2
+                # Spawn enemy if missing
+                if self.tutorial_enemy is None:
+                    sx, sy = 100.0, 100.0
+                    self.tutorial_enemy = {'x': sx, 'y': sy, 'rect': pygame.Rect(int(sx), int(sy), 30, 30)}
+                else:
+                    ex = self.tutorial_enemy['x']
+                    ey = self.tutorial_enemy['y']
+                    dx = center_x - ex
+                    dy = center_y - ey
+                    dist = math.hypot(dx, dy)
+                    if dist != 0:
+                        # Move towards center using pyro enemy speed
+                        self.tutorial_enemy['x'] += (dx / dist) * PYRO_ENEMY_SPEED
+                        self.tutorial_enemy['y'] += (dy / dist) * PYRO_ENEMY_SPEED
+                        self.tutorial_enemy['rect'].center = (int(self.tutorial_enemy['x']), int(self.tutorial_enemy['y']))
+
+                    # If it reaches the core, play hit feedback and reset to start
+                    if dist < 40:
+                        try:
+                            if hasattr(self.audio, 'play'):
+                                self.audio.play('hit')
+                        except Exception:
+                            pass
+                        # Small screen shake and reset position to loop until shot
+                        try:
+                            self.particle_system.atmosphere.trigger_shake(15, 6)
+                        except Exception:
+                            self.screen_shake = 6
+                        # Reset position
+                        self.tutorial_enemy['x'] = 100.0
+                        self.tutorial_enemy['y'] = 100.0
+                        self.tutorial_enemy['rect'].center = (100, 100)
+
             # Clamp and deactivate overlay when finished, then start a real run
             if self.tutorial_step >= TOTAL_TUTORIAL_STEPS:
                 self.tutorial_step = TOTAL_TUTORIAL_STEPS
@@ -1446,240 +1576,143 @@ class Game:
                 if self.score >= self.level_target and not self.blocks and self.void_count == 0: self.check_round_end()
 
     def draw(self):
+        # 1. Intro Check (Stop everything else)
         if self.state == STATE_INTRO:
             if self.intro_manager:
-                self.intro_manager.draw()  # Draw the video frame on top
-            pygame.display.flip()  # Ensure intro frame is pushed to display
-            return  # Stop
-        
-        # All other states - normal rendering
+                self.intro_manager.draw()
+            pygame.display.flip()
+            return
+
+        # 2. Global Background (Applied to all states)
         self.ui.draw_bg(self.screen)
 
-        # Pyro Mode (Round 3 only): Dark red overlay over animated background
-        if self.round == 3 and self.state in [STATE_PLAYING, STATE_SCORING, STATE_PYRO_DEATH]:
-            overlay = pygame.Surface((VIRTUAL_W, VIRTUAL_H), pygame.SRCALPHA)
-            overlay.fill((20, 0, 5, 230))  # High alpha for dark red tint
-            self.screen.blit(overlay, (0, 0))
-        
+        # 3. STATE MACHINE (Strict Separation)
+
+        # --- MENU STATE ---
         if self.state == STATE_MENU:
             self.ui.draw_menu(self.screen, self.high_score)
-            # Draw reset confirmation overlay if active
             if self.show_reset_confirm:
                 self.ui.draw_reset_confirm_overlay(self.screen)
+        # --- COMING SOON ---
         elif self.state == STATE_COMING_SOON:
             self.ui.draw_coming_soon(self.screen)
+        # --- SETTINGS ---
+        elif self.state == STATE_SETTINGS:
+            self.ui.draw_settings(self.screen, self)
+        # --- COLLECTION ---
+        elif self.state == STATE_COLLECTION:
+            self.ui.draw_collection(self.screen, self)
+        # --- TRAINING STATE (Tutorial) ---
         elif self.state == STATE_TRAINING:
-            # Draw training mode (game board + tutorial overlay)
-            boss_shake_x, boss_shake_y = self.particle_system.atmosphere.get_shake_offset()
-            normal_shake_x = random.randint(-self.screen_shake, self.screen_shake) if self.screen_shake > 0 else 0
-            normal_shake_y = random.randint(-self.screen_shake, self.screen_shake) if self.screen_shake > 0 else 0
-            
-            total_shake_x = boss_shake_x + normal_shake_x
-            total_shake_y = boss_shake_y + normal_shake_y
-
-            # Layer 1: Background already drawn
-
-            # Layer 2: Grid
+            # A. Grid (Bottom)
             theme = self.get_current_theme()
             self.grid.draw(self.screen, theme)
-
-            # Layer 3: Static UI (backgrounds only)
+            # B. Tutorial Enemy (Under UI)
+            if getattr(self, 'tutorial_step', 0) == 6:
+                s = pygame.Surface((VIRTUAL_W, VIRTUAL_H), pygame.SRCALPHA)
+                s.fill((255, 0, 0, 50))
+                self.screen.blit(s, (0,0))
+                if getattr(self, 'tutorial_enemy', None):
+                    ex, ey = self.tutorial_enemy['rect'].center
+                    pygame.draw.circle(self.screen, (0,0,0,100), (ex+4, ey+4), 18)
+                    pygame.draw.circle(self.screen, (160,0,0), (ex, ey), 16)
+                    pygame.draw.circle(self.screen, (255,255,255), (ex, ey), 10)
+                    pygame.draw.circle(self.screen, (0,0,0), (ex, ey), 4)
+            # C. UI Layers (Sidebar covers enemy)
             self.ui.draw_sidebar(self.screen, self)
             self.ui.draw_hand_bg(self.screen)
             self.ui.draw_top_bar(self.screen, self)
             self.ui.draw_hud_elements(self.screen, self)
-            
-            # Layer 4: Hand blocks and runes (ON TOP of UI backgrounds)
-            # Draw Idle Runes
-            start_x = SIDEBAR_WIDTH + 20
-            start_y = 60
-            for i, r in enumerate(self.consumables):
-                if not r.dragging:
-                    r.x = start_x + i * 50
-                    r.y = start_y
-                    r.rect = pygame.Rect(r.x, r.y, 40, 40)
-                    
-                    # Draw circle background
-                    pygame.draw.circle(self.screen, (20, 20, 30), (r.x + 20, r.y + 20), 20)
-                    # Draw colored border
-                    pygame.draw.circle(self.screen, r.color, (r.x + 20, r.y + 20), 18)
-                    # Draw icon text
-                    font = pygame.font.SysFont("Arial", 20, bold=True)
-                    txt = font.render(r.icon, True, (255, 255, 255))
-                    self.screen.blit(txt, txt.get_rect(center=(r.x + 20, r.y + 20)))
-            
-            # Draw Hand Blocks
-            for b in self.blocks:
-                if b != self.held_block:
-                    b.draw(self.screen, 0, 0, 0.8, 255, theme['style'])
-            
-            # Layer 5: VFX/Particles (above grid and hand)
+            # D. Hand Items & Particles
+            self._draw_hand_items(theme)
             self.particle_system.draw(self.screen)
-
-            # Layer 6: Tutorial overlay (darkens background, shows instructions)
+            # E. Tutorial Text (Top)
             if getattr(self, 'tutorial_active', True):
                 self.ui.draw_training_overlay(self.screen, self, self.tutorial_step)
-            
-            # Layer 7: Held block (dragged item) on top of everything
-            if self.held_block:
-                if self.held_block.dragging:
-                    cur_x = self.mouse_x - self.held_block.offset_x
-                    cur_y = self.mouse_y - self.held_block.offset_y
-                    check_x = cur_x + (TILE_SIZE / 2)
-                    check_y = cur_y + (TILE_SIZE / 2)
-                    gr, gc = self.get_grid_pos(check_x, check_y)
-                    
-                    if gr is not None and gc is not None:
-                        # Show ghost on grid
-                        target_px = GRID_OFFSET_X + gc * TILE_SIZE
-                        target_py = GRID_OFFSET_Y + gr * TILE_SIZE
-                        orig = self.held_block.rect.topleft
-                        self.held_block.rect.topleft = (target_px, target_py)
-                        if self.grid.is_valid_position(self.held_block, gr, gc):
-                            self.held_block.draw(self.screen, target_px, target_py, 1.0, 60, theme['style'])
-                        self.held_block.rect.topleft = orig
-                    
-                    # Draw actual held block at cursor (on top of everything)
-                    self.held_block.draw(self.screen, cur_x, cur_y, 1.0, 255, theme['style'])
-                else:
-                    # Not dragging, draw at current position
-                    self.held_block.draw(self.screen, 0, 0, 1.0, 255, theme['style'])
-            
-            # Layer 8: Held rune on top
-            if self.held_rune and self.held_rune.dragging:
-                rx, ry = self.held_rune.x, self.held_rune.y
+            # F. Dragged Items
+            self._draw_dragged_items(theme)
+            # DRAW DRAGGED RUNE (Fix for vanishing rune)
+            if self.held_rune and getattr(self.held_rune, 'dragging', False):
+                rx, ry = self.mouse_x, self.mouse_y
                 pygame.draw.circle(self.screen, (20, 20, 30), (rx, ry), 24)
                 pygame.draw.circle(self.screen, self.held_rune.color, (rx, ry), 22, 3)
                 font = pygame.font.SysFont("Arial", 22, bold=True)
                 txt = font.render(self.held_rune.icon, True, self.held_rune.color)
                 self.screen.blit(txt, txt.get_rect(center=(rx, ry)))
+        # --- PLAYING / SCORING / PYRO ---
+        elif self.state in [STATE_PLAYING, STATE_SCORING, STATE_PYRO, STATE_PYRO_DEATH, STATE_LEVEL_COMPLETE, STATE_GAME_OVER]:
+            # Standard Game Loop Drawing
+            self._draw_gameplay_elements()
+        # --- OTHER STATES ---
         elif self.state == STATE_ROUND_SELECT:
             self.ui.draw_round_select(self.screen, self)
-        elif self.state == STATE_INTRO:
-            # Intro manager already blits frame in update/play
-            pass
         elif self.state == STATE_DEBT:
             self.ui.draw_debt_screen(self.screen, self)
         elif self.state == STATE_DEMO_END:
             self.ui.draw_demo_end(self.screen, self)
-        elif self.state == STATE_COLLECTION:
-            self.ui.draw_collection(self.screen, self)
-        elif self.state == STATE_SETTINGS:
-            self.ui.draw_settings(self.screen, self)
-        else:
-            boss_shake_x, boss_shake_y = self.particle_system.atmosphere.get_shake_offset()
-            normal_shake_x = random.randint(-self.screen_shake, self.screen_shake) if self.screen_shake > 0 else 0
-            normal_shake_y = random.randint(-self.screen_shake, self.screen_shake) if self.screen_shake > 0 else 0
-            
-            total_shake_x = boss_shake_x + normal_shake_x
-            total_shake_y = boss_shake_y + normal_shake_y
+        elif self.state == STATE_PAUSE:
+            # Draw game under pause
+            self._draw_gameplay_elements()
+            self.ui.draw_pause_overlay(self.screen)
+        elif self.state == STATE_SHOP:
+            self.ui.draw_shop(self.screen, self)
 
-            # Layer 1: Background already drawn
-
-            # Layer 2: Grid
-            theme = self.get_current_theme()
-            self.grid.draw(self.screen, theme)
-
-            # --- PYRO MODE CORRECTED DRAWING ---
-            if self.round == 3 and self.state in [STATE_PLAYING, STATE_SCORING]:
-                # Draw Enemies (NOW ON TOP OF GRID)
-                for enemy in self.enemies:
-                    ex, ey = enemy['rect'].center
-                    # Shadow
-                    pygame.draw.circle(self.screen, (0, 0, 0), (ex+2, ey+2), 16)
-                    # Body
-                    pygame.draw.circle(self.screen, (150, 0, 0), (ex, ey), 15)
-                    pygame.draw.circle(self.screen, (255, 255, 255), (ex, ey), 10)
-                    pygame.draw.circle(self.screen, (0, 0, 0), (ex, ey), 4)
-                # Red Flash Effect
-                if self.pyro_flash_timer > 0:
-                    self.pyro_flash_timer -= 1
-                    s = pygame.Surface((VIRTUAL_W, VIRTUAL_H), pygame.SRCALPHA)
-                    s.fill((255, 0, 0, 100))
-                    self.screen.blit(s, (0,0))
-
-            # Layer 3: Static UI backgrounds
-            self.ui.draw_sidebar(self.screen, self)
-            self.ui.draw_hand_bg(self.screen)
-            self.ui.draw_top_bar(self.screen, self)
-            self.ui.draw_hud_elements(self.screen, self)
-            
-            # Layer 4: Hand (blocks and runes ON TOP of UI backgrounds)
-            if self.state in [STATE_PLAYING, STATE_TRAINING]:
-                start_x = SIDEBAR_WIDTH + 20
-                start_y = 60
-                for i, r in enumerate(self.consumables):
-                    if not r.dragging:
-                        r.x = start_x + i * 50
-                        r.y = start_y
-                        r.rect = pygame.Rect(r.x, r.y, 40, 40)
-                        pygame.draw.circle(self.screen, (20,20,30), (r.x+20, r.y+20), 20)
-                        pygame.draw.circle(self.screen, r.color, (r.x+20, r.y+20), 18)
-                        font = pygame.font.SysFont("Arial", 20, bold=True)
-                        txt = font.render(r.icon, True, (255,255,255))
-                        self.screen.blit(txt, txt.get_rect(center=(r.x+20, r.y+20)))
-            
-            for b in self.blocks:
-                if b != self.held_block:
-                    b.draw(self.screen, 0, 0, 0.8, 255, theme['style'])
-            
-            # Layer 5: VFX/Particles (above grid and hand)
-            self.particle_system.draw(self.screen)
-
-            # Layer 6: Atmosphere overlay and ghost block preview
-            danger_level = 0.0
-            if self.active_boss_effect:
-                danger_level = 0.2 
-            self.particle_system.atmosphere.draw_overlay(self.screen, danger_level)
-            
-            if self.active_boss_effect != 'The Haze': 
-                if self.held_block and self.held_block.dragging:
-                    cur_x = self.mouse_x - self.held_block.offset_x
-                    cur_y = self.mouse_y - self.held_block.offset_y
-                    check_x = cur_x + (TILE_SIZE / 2); check_y = cur_y + (TILE_SIZE / 2)
-                    gr, gc = self.get_grid_pos(check_x, check_y)
-                    if gr is not None and gc is not None:
-                        target_px = GRID_OFFSET_X + gc * TILE_SIZE
-                        target_py = GRID_OFFSET_Y + gr * TILE_SIZE
-                        orig = self.held_block.rect.topleft
-                        self.held_block.rect.topleft = (target_px, target_py)
-                        if self.grid.is_valid_position(self.held_block, gr, gc):
-                            self.held_block.draw(self.screen, target_px, target_py, 1.0, 60, theme['style'])
-                        self.held_block.rect.topleft = orig
-            
-            # Layer 7: State-specific overlays
-            if self.state == STATE_SHOP:
-                self.ui.draw_shop(self.screen, self)
-
-            elif self.state == STATE_PAUSE: self.ui.draw_pause_overlay(self.screen)
-            elif self.state == STATE_PYRO_DEATH: self.ui.draw_pyro_death(self.screen, self)
-            elif self.state == STATE_GAME_OVER: self.ui.draw_game_over(self.screen, self.score)
-            
-            # Tooltips
-            if self.state != STATE_SHOP:
-                self.ui.draw_final_tooltip_layer(self.screen, self)
-            
-            # Layer 8: Dragged rune (on top of overlays)
-            if self.state in [STATE_PLAYING, STATE_TRAINING] and self.held_rune and self.held_rune.dragging:
-                rx, ry = self.held_rune.x, self.held_rune.y
-                pygame.draw.circle(self.screen, (20, 20, 30), (rx, ry), 24)
-                pygame.draw.circle(self.screen, self.held_rune.color, (rx, ry), 22, 3)
-                font = pygame.font.SysFont("Arial", 22, bold=True)
-                txt = font.render(self.held_rune.icon, True, self.held_rune.color)
-                self.screen.blit(txt, txt.get_rect(center=(rx, ry)))
-            
-            # Layer 9: Dragged block (topmost)
-            if self.held_block: 
-                self.held_block.draw(self.screen, 0, 0, 1.0, 255, theme['style'])
-        
-        # Apply CRT effects to screen
+        # Global Overlays (CRT, Pharaoh, Cursor)
         self.crt.draw(self.screen)
-        
-        # Draw Pharaoh on top of everything (only in gameplay states)
         if self.state in [STATE_PLAYING, STATE_SCORING, STATE_TRAINING]:
             self.ui.draw_overlay_elements(self.screen)
-        
+
         pygame.display.flip()
+
+    # Helper to prevent duplication
+    def _draw_hand_items(self, theme):
+        start_x = SIDEBAR_WIDTH + 20
+        start_y = 60
+        for i, r in enumerate(self.consumables):
+            if not r.dragging:
+                r.x = start_x + i * 50
+                r.y = start_y
+                r.rect = pygame.Rect(r.x, r.y, 40, 40)
+                pygame.draw.circle(self.screen, (20, 20, 30), (r.x+20, r.y+20), 20)
+                pygame.draw.circle(self.screen, r.color, (r.x+20, r.y+20), 18)
+                font = pygame.font.SysFont("Arial", 20, bold=True)
+                txt = font.render(r.icon, True, (255,255,255))
+                self.screen.blit(txt, txt.get_rect(center=(r.x+20, r.y+20)))
+        for b in self.blocks:
+            if b != self.held_block:
+                b.draw(self.screen, 0, 0, 0.8, 255, theme['style'])
+
+    def _draw_dragged_items(self, theme):
+        if self.held_block and self.held_block.dragging:
+            cur_x = self.mouse_x - self.held_block.offset_x
+            cur_y = self.mouse_y - self.held_block.offset_y
+            self.held_block.draw(self.screen, cur_x, cur_y, 1.0, 255, theme['style'])
+
+    def _draw_gameplay_elements(self):
+        theme = self.get_current_theme()
+        self.particle_system.atmosphere.get_shake_offset() # Tick shake
+        self.grid.draw(self.screen, theme)
+        
+        # Pyro Enemies (Round 3)
+        if self.round == 3 and self.state in [STATE_PLAYING, STATE_SCORING]:
+            for enemy in self.enemies:
+                ex, ey = enemy['rect'].center
+                pygame.draw.circle(self.screen, (0,0,0), (ex+2, ey+2), 16)
+                pygame.draw.circle(self.screen, (150,0,0), (ex, ey), 15)
+                pygame.draw.circle(self.screen, (255,255,255), (ex, ey), 10)
+                pygame.draw.circle(self.screen, (0,0,0), (ex, ey), 4)
+        self.ui.draw_sidebar(self.screen, self)
+        self.ui.draw_hand_bg(self.screen)
+        self.ui.draw_top_bar(self.screen, self)
+        self.ui.draw_hud_elements(self.screen, self)
+        self._draw_hand_items(theme)
+        self.particle_system.draw(self.screen)
+        
+        if self.state == STATE_PYRO_DEATH: self.ui.draw_pyro_death(self.screen, self)
+        elif self.state == STATE_GAME_OVER: self.ui.draw_game_over(self.screen, self.score)
+        
+        if self.state != STATE_SHOP: self.ui.draw_final_tooltip_layer(self.screen, self)
+        self._draw_dragged_items(theme)
 
     def run(self):
         while True:
