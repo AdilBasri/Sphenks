@@ -114,6 +114,16 @@ LANGUAGES = {
                 "refresh_shop": {"name": "REROLL", "desc": "Refresh all items in the bazaar."},
                 "unknown": {"name": "UNKNOWN", "desc": "A mysterious artifact."}
             },
+            "UNLOCKS": {
+                "tiny_bag": {"name": "POCKET MONEY", "desc": "Paid 5k Debt"},
+                "blueprint": {"name": "ARCHITECT", "desc": "Paid 10k Debt"},
+                "gamblers_coin": {"name": "HIGH ROLLER", "desc": "Paid 25k Debt"},
+                "obsidian_wall": {"name": "DEFENDER", "desc": "Paid 50k Debt"},
+                "divine_smite": {"name": "THE PURGER", "desc": "Paid 100k Debt"},
+                "midas_hand": {"name": "GOLDEN TOUCH", "desc": "Paid 250k Debt"},
+                "phoenix_feather": {"name": "IMMORTAL", "desc": "Paid 500k Debt"},
+                "eye_of_ra": {"name": "FREEDOM", "desc": "Debt Cleared"}
+            },
             "BAZAAR": "BAZAAR",
             "TOTEMS": "TOTEMS",
             "RUNES": "RUNES",
@@ -221,6 +231,16 @@ LANGUAGES = {
                 "refresh_shop": {"name": "YENILE", "desc": "Pazardaki esyalari yeniler."},
                 "unknown": {"name": "BILINMEYEN", "desc": "Gizemli bir nesne."}
             },
+            "UNLOCKS": {
+                "tiny_bag": {"name": "CEBİNDE PARA", "desc": "5k Borç Ödendi"},
+                "blueprint": {"name": "MİMAR", "desc": "10k Borç Ödendi"},
+                "gamblers_coin": {"name": "YÜKSEK OYUNCU", "desc": "25k Borç Ödendi"},
+                "obsidian_wall": {"name": "DİFENDER", "desc": "50k Borç Ödendi"},
+                "divine_smite": {"name": "TEMİZLEYİCİ", "desc": "100k Borç Ödendi"},
+                "midas_hand": {"name": "ALTIN DOKUNUŞ", "desc": "250k Borç Ödendi"},
+                "phoenix_feather": {"name": "ÖLMEZ", "desc": "500k Borç Ödendi"},
+                "eye_of_ra": {"name": "ÖZGÜRLÜK", "desc": "Borç Tamamen Ödendi"}
+            },
             "BAZAAR": "PAZAR",
             "TOTEMS": "TOTEMLER",
             "RUNES": "RUNLER",
@@ -326,6 +346,16 @@ LANGUAGES = {
                 "rune_earth": {"name": "ERDRUNE", "desc": "Verwandelt einen Block in Stein."},
                 "refresh_shop": {"name": "ERNEUERUNG", "desc": "Aktualisiere alle Marktartikel."},
                 "unknown": {"name": "UNBEKANNT", "desc": "Ein rätselhaftes Artefakt."}
+            },
+            "UNLOCKS": {
+                "tiny_bag": {"name": "TASCHENGELD", "desc": "5k Schulden bezahlt"},
+                "blueprint": {"name": "ARCHITEKT", "desc": "10k Schulden bezahlt"},
+                "gamblers_coin": {"name": "HIGH ROLLER", "desc": "25k Schulden bezahlt"},
+                "obsidian_wall": {"name": "VERTEIDIGER", "desc": "50k Schulden bezahlt"},
+                "divine_smite": {"name": "DER REINIGER", "desc": "100k Schulden bezahlt"},
+                "midas_hand": {"name": "GOLDENE BERÜHRUNG", "desc": "250k Schulden bezahlt"},
+                "phoenix_feather": {"name": "UNSTERBLICH", "desc": "500k Schulden bezahlt"},
+                "eye_of_ra": {"name": "FREIHEIT", "desc": "Schuld Beglichen"}
             },
             "BAZAAR": "BASAR",
             "TOTEMS": "TOTEMS",
@@ -433,6 +463,16 @@ LANGUAGES = {
                 "refresh_shop": {"name": "RENOVAR", "desc": "Actualiza bazaar."},
                 "unknown": {"name": "DESCONOCIDO", "desc": "Artefacto misterioso."}
             },
+            "UNLOCKS": {
+                "tiny_bag": {"name": "DINERO DE BOLSILLO", "desc": "Pagó 5k de deuda"},
+                "blueprint": {"name": "ARQUITECTO", "desc": "Pagó 10k de deuda"},
+                "gamblers_coin": {"name": "ALTO APOSTADOR", "desc": "Pagó 25k de deuda"},
+                "obsidian_wall": {"name": "DEFENSOR", "desc": "Pagó 50k de deuda"},
+                "divine_smite": {"name": "EL PURGADOR", "desc": "Pagó 100k de deuda"},
+                "midas_hand": {"name": "TOQUE DORADO", "desc": "Pagó 250k de deuda"},
+                "phoenix_feather": {"name": "INMORTAL", "desc": "Pagó 500k de deuda"},
+                "eye_of_ra": {"name": "LIBERTAD", "desc": "Deuda saldada"}
+            },
             "BAZAAR": "MERCADO",
             "TOTEMS": "TOTEMS",
             "RUNES": "RUNAS",
@@ -538,6 +578,16 @@ LANGUAGES = {
                 "rune_earth": {"name": "土符文", "desc": "变为石块。"},
                 "refresh_shop": {"name": "刷新", "desc": "刷新市集。"},
                 "unknown": {"name": "未知", "desc": "神秘的神器。"}
+            },
+            "UNLOCKS": {
+                "tiny_bag": {"name": "口袋钱", "desc": "支付了5k债务"},
+                "blueprint": {"name": "建筑师", "desc": "支付了10k债务"},
+                "gamblers_coin": {"name": "高赌客", "desc": "支付了25k债务"},
+                "obsidian_wall": {"name": "防御者", "desc": "支付了50k债务"},
+                "divine_smite": {"name": "净化者", "desc": "支付了100k债务"},
+                "midas_hand": {"name": "点金手", "desc": "支付了250k债务"},
+                "phoenix_feather": {"name": "不朽", "desc": "支付了500k债务"},
+                "eye_of_ra": {"name": "自由", "desc": "债务已清"}
             },
             "BAZAAR": "集市",
             "TOTEMS": "图腾",
@@ -645,6 +695,16 @@ LANGUAGES = {
                 "refresh_shop": {"name": "Atualizar", "desc": "Atualiza a loja."},
                 "unknown": {"name": "Desconhecido", "desc": "Artefato misterioso."}
             },
+            "UNLOCKS": {
+                "tiny_bag": {"name": "DINHEIRO NO BOLSO", "desc": "Pagou 5k de dívida"},
+                "blueprint": {"name": "ARQUITETO", "desc": "Pagou 10k de dívida"},
+                "gamblers_coin": {"name": "ALTO APOSTADOR", "desc": "Pagou 25k de dívida"},
+                "obsidian_wall": {"name": "DEFENSOR", "desc": "Pagou 50k de dívida"},
+                "divine_smite": {"name": "O PURGADOR", "desc": "Pagou 100k de dívida"},
+                "midas_hand": {"name": "TOQUE DOURADO", "desc": "Pagou 250k de dívida"},
+                "phoenix_feather": {"name": "IMORTAL", "desc": "Pagou 500k de dívida"},
+                "eye_of_ra": {"name": "LIBERDADE", "desc": "Dívida quitada"}
+            },
             "BAZAAR": "Mercado",
             "TOTEMS": "Totens",
             "RUNES": "Runas",
@@ -750,6 +810,26 @@ LANGUAGES = {
                 "rune_earth": {"name": "Rune de Terre", "desc": "Convertir en bloc pierre."},
                 "refresh_shop": {"name": "Actualiser", "desc": "Actualise le bazar."},
                 "unknown": {"name": "Inconnu", "desc": "Artefact mystérieux."}
+            },
+            "UNLOCKS": {
+                "tiny_bag": {"name": "ARGENT DE POCHE", "desc": "A payé 5k de dette"},
+                "blueprint": {"name": "ARCHITECTE", "desc": "A payé 10k de dette"},
+                "gamblers_coin": {"name": "HAUT PARIEUR", "desc": "A payé 25k de dette"},
+                "obsidian_wall": {"name": "DÉFENSEUR", "desc": "A payé 50k de dette"},
+                "divine_smite": {"name": "LE PURGATEUR", "desc": "A payé 100k de dette"},
+                "midas_hand": {"name": "TOUCHE D'OR", "desc": "A payé 250k de dette"},
+                "phoenix_feather": {"name": "IMMORTEL", "desc": "A payé 500k de dette"},
+                "eye_of_ra": {"name": "LIBERTÉ", "desc": "Dette réglée"}
+            },
+            "UNLOCKS": {
+                "tiny_bag": {"name": "SOLDI IN TASCA", "desc": "Pagato 5k di debito"},
+                "blueprint": {"name": "ARCHITETTO", "desc": "Pagato 10k di debito"},
+                "gamblers_coin": {"name": "ALTO SCOMMESSATORE", "desc": "Pagato 25k di debito"},
+                "obsidian_wall": {"name": "DIFENSORE", "desc": "Pagato 50k di debito"},
+                "divine_smite": {"name": "IL PURGATORE", "desc": "Pagato 100k di debito"},
+                "midas_hand": {"name": "TOCCO D'ORO", "desc": "Pagato 250k di debito"},
+                "phoenix_feather": {"name": "IMMORTALE", "desc": "Pagato 500k di debito"},
+                "eye_of_ra": {"name": "LIBERTÀ", "desc": "Debito saldato"}
             },
             "BAZAAR": "Bazaar",
             "TOTEMS": "Totems",

@@ -18,6 +18,7 @@ from audio import AudioManager
 from crt import CRTManager
 from save_data import SaveManager
 from pyro_manager import PyroManager
+from settings import UNLOCKS
 
 def resource_path(relative_path):
     """ Dosyanın nerede olduğunu akıllıca bulur """
@@ -414,6 +415,9 @@ class Game:
             self.active_boss_effect = None
         
         self.refill_hand()
+        # Divine Smite per-round state
+        self.divine_smite_charges = 3
+        self.divine_smite_cooldown = 0
 
     def start_pyro_mode(self):
         self.tutorial_step = 0
@@ -520,6 +524,25 @@ class Game:
         # Step 4-5: apply payment and compute new debt
         self.save_manager.pay_debt(self.debt_payment_amount)
         new_debt = self.save_manager.get_remaining_debt()
+
+        # --- TRIGGER UNLOCK CHECK ---
+        try:
+            new_items = self.save_manager.check_unlocks()
+            # Show notifications for each new item
+            if new_items:
+                try:
+                    self.audio.play('clear')
+                except Exception:
+                    pass
+                for key in new_items:
+                    info = UNLOCKS.get(key, {'name': 'UNKNOWN', 'desc': '???'})
+                    if hasattr(self.ui, 'show_notification'):
+                        try:
+                            self.ui.show_notification("UNLOCKED!", info.get('name', key))
+                        except Exception:
+                            pass
+        except Exception:
+            pass
 
         # Step 6: choose quotes based on freedom state and set active text
         self.debt_freedom = (new_debt == 0)
@@ -720,7 +743,19 @@ class Game:
         else:
             normal_keys = [k for k in TOTEM_DATA.keys() if k not in OMEGA_KEYS]
             for _ in range(3):
-                k = random.choice(normal_keys)
+                # Pick a totem but avoid selling locked UNLOCKS items
+                attempts = 0
+                k = None
+                while attempts < 12:
+                    candidate = random.choice(normal_keys)
+                    # If candidate corresponds to an unlock and is not yet unlocked, skip
+                    if candidate in UNLOCKS and candidate not in self.save_manager.data.get('unlocked_items', []):
+                        attempts += 1
+                        continue
+                    k = candidate
+                    break
+                if k is None:
+                    k = random.choice(normal_keys)
                 self.shop_totems.append(Totem(k, TOTEM_DATA[k]))
         
         # --- RÜN DÜKKANI ---
@@ -1109,15 +1144,65 @@ class Game:
                 elif event.type == pygame.MOUSEBUTTONUP:
                     mx, my = event.pos
 
-                    if event.button == 3 and (self.round == 3 or self.ante >= NEW_WORLD_ANTE):
-                        hit = False
-                        for enemy in self.enemies[:]:
-                            if enemy['rect'].collidepoint(mx, my):
-                                self.enemies.remove(enemy)
-                                hit = True
-                                self.audio.play('explode')
-                                self.particle_system.create_explosion(mx, my, count=10)
-                                self.particle_system.create_text(mx, my, "HIT!", (255, 50, 50), font_path=self.font_name)
+                    if event.button == 3:
+                        # Divine Smite usage if player owns the totem
+                        used_smite = False
+                        has_smite = any(getattr(t, 'key', None) == 'divine_smite' for t in self.totems)
+                        charges = getattr(self, 'divine_smite_charges', 0)
+                        cooldown = getattr(self, 'divine_smite_cooldown', 0)
+                        if has_smite and charges > 0 and cooldown == 0:
+                            # Try hit enemies first
+                            for enemy in self.enemies[:]:
+                                if enemy['rect'].collidepoint(mx, my):
+                                    try:
+                                        self.enemies.remove(enemy)
+                                    except Exception:
+                                        pass
+                                    used_smite = True
+                                    try: self.audio.play('explode')
+                                    except Exception: pass
+                                    try: self.particle_system.create_explosion(mx, my, count=18)
+                                    except Exception: pass
+                                    try: self.particle_system.create_text(mx, my, "SMITE!", (255, 50, 50), font_path=self.font_name)
+                                    except Exception: pass
+                                    break
+
+                            # If no enemy hit, try grid cell destruction
+                            if not used_smite:
+                                gr, gc = self.get_grid_pos(mx, my)
+                                if gr is not None and gc is not None:
+                                    try:
+                                        if self.grid.grid[gr][gc] is not None:
+                                            # Clear that single cell
+                                            self.grid.grid[gr][gc] = None
+                                            px = GRID_OFFSET_X + gc * TILE_SIZE + TILE_SIZE // 2
+                                            py = GRID_OFFSET_Y + gr * TILE_SIZE + TILE_SIZE // 2
+                                            try: self.audio.play('explode')
+                                            except Exception: pass
+                                            try: self.particle_system.create_explosion(px, py, count=12)
+                                            except Exception: pass
+                                            try: self.particle_system.create_text(px, py, "SMITE!", (255, 50, 50), font_path=self.font_name)
+                                            except Exception: pass
+                                            used_smite = True
+                                    except Exception:
+                                        pass
+
+                            if used_smite:
+                                # Consume charge and set cooldown
+                                self.divine_smite_charges = max(0, getattr(self, 'divine_smite_charges', 0) - 1)
+                                self.divine_smite_cooldown = 30  # cooldown frames
+
+                        # Fallback: legacy right-click behavior (Pyro enemy hit)
+                        if not used_smite and (self.round == 3 or self.ante >= NEW_WORLD_ANTE):
+                            hit = False
+                            for enemy in self.enemies[:]:
+                                if enemy['rect'].collidepoint(mx, my):
+                                    self.enemies.remove(enemy)
+                                    hit = True
+                                    self.audio.play('explode')
+                                    self.particle_system.create_explosion(mx, my, count=10)
+                                    self.particle_system.create_text(mx, my, "HIT!", (255, 50, 50), font_path=self.font_name)
+                                    break
 
                     # --- Rün Bırakma Mantığı (Çoklu Rün Sistemi) ---
                     if self.held_rune:
@@ -1376,23 +1461,35 @@ class Game:
                             self.input_cooldown = 15
             
             elif self.state == STATE_COLLECTION:
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    mx, my = event.pos
-                    # Check if back button was clicked
-                    if hasattr(self.ui, 'collection_back_button'):
-                        if self.ui.collection_back_button.collidepoint(mx, my) and self.input_cooldown == 0:
-                            self.audio.play('select')
-                            self.state = STATE_MENU
-                
+                # 1. Handle Keypress (ESC to Exit)
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        try: self.audio.play('select')
+                        except Exception: pass
+                        self.state = STATE_MENU
+
+                # 2. Handle Mouse Scroll
                 elif event.type == pygame.MOUSEWHEEL:
-                    # Handle collection scroll
-                    if event.y > 0:  # Scroll up
-                        self.ui.collection_scroll_y -= 30
-                    elif event.y < 0:  # Scroll down
-                        self.ui.collection_scroll_y += 30
-                    
-                    # Clamp scroll value (max scroll will be calculated in draw_collection)
-                    self.ui.collection_scroll_y = max(0, self.ui.collection_scroll_y)
+                    scroll_speed = 30
+                    # Subtract y because wheel up (positive) means moving content up
+                    self.ui.collection_scroll_y -= event.y * scroll_speed
+
+                    # Clamp scrolling
+                    if self.ui.collection_scroll_y < 0:
+                        self.ui.collection_scroll_y = 0
+                    elif self.ui.collection_scroll_y > 400:
+                        self.ui.collection_scroll_y = 400
+
+                # 3. Handle Mouse Click (Back Button or Item details)
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    if event.button == 1:  # Left Click
+                        mx, my = event.pos
+                        # Check for Back Button (Positioned at bottom left usually)
+                        back_btn_rect = pygame.Rect(50, VIRTUAL_H - 50, 150, 40)
+                        if back_btn_rect.collidepoint(mx, my):
+                            try: self.audio.play('select')
+                            except Exception: pass
+                            self.state = STATE_MENU
             
             elif self.state == STATE_SETTINGS:
                 if event.type == pygame.MOUSEBUTTONDOWN and hasattr(self.ui, 'settings_buttons'):
@@ -1496,6 +1593,9 @@ class Game:
                 self.shake_intensity = 0.0
         
         self.grid.update()
+        # Divine Smite cooldown decrement
+        if getattr(self, 'divine_smite_cooldown', 0) > 0:
+            self.divine_smite_cooldown = max(0, self.divine_smite_cooldown - 1)
         
         diff = self.score - self.visual_score
         if diff > 0: self.visual_score += max(1, diff // 5)
@@ -1782,6 +1882,17 @@ class Game:
                 # Clear screen to avoid ghosting; UI background will be mostly filled by blit
                 self.screen.fill((0,0,0))
                 self.screen.blit(buf, (int(sx), int(sy)))
+        except Exception:
+            pass
+
+        # --- FINAL RENDER LAYER ---
+        # Force draw notifications on top of absolutely everything (even CRT/Transitions)
+        try:
+            if hasattr(self.ui, 'draw_notifications_explicit'):
+                try:
+                    self.ui.draw_notifications_explicit(self.screen)
+                except Exception:
+                    pass
         except Exception:
             pass
 

@@ -248,6 +248,8 @@ COLLECTIBLES = [
     }
 ]
 
+
+
 # --- BLOKLAR ---
 SHAPES = {
     'I': [[1, 1, 1, 1]], 'O': [[1, 1], [1, 1]],
@@ -305,6 +307,66 @@ TOTEM_DATA = {
     'infinity_stone': {'name': 'Infinity Stone', 'price': 35, 'desc': '+$5 & x2 Mult on clear', 'trigger': 'on_clear', 'rarity': 'Omega'},
     'chronos': {'name': 'Chronos', 'price': 30, 'desc': '+50% Interest', 'trigger': 'on_round_end', 'rarity': 'Omega'}
 }
+
+# --- NEW UNLOCKABLE TOTEMS ---
+TOTEM_DATA.update({
+    'tiny_bag': {
+        'name': 'Tiny Bag',
+        'price': 8,
+        'desc': 'Start each round with +$10.',
+        'trigger': 'passive',
+        'rarity': 'Uncommon'
+    },
+    'blueprint': {
+        'name': 'Blueprint',
+        'price': 12,
+        'desc': 'Architectural plans (passive — logic added later).',
+        'trigger': 'passive',
+        'rarity': 'Rare'
+    },
+    'gamblers_coin': {
+        'name': "Gambler's Coin",
+        'price': 10,
+        'desc': 'Rerolls cost $1 less.',
+        'trigger': 'passive',
+        'rarity': 'Uncommon'
+    },
+    'obsidian_wall': {
+        'name': 'Obsidian Wall',
+        'price': 18,
+        'desc': 'Pyro enemies move slower (x0.8).',
+        'trigger': 'passive',
+        'rarity': 'Rare'
+    },
+    'divine_smite': {
+        'name': 'Divine Smite',
+        'price': 35,
+        'desc': 'Right-click: smite enemies (3 charges/round).',
+        'trigger': 'passive',
+        'rarity': 'Legendary'
+    },
+    'midas_hand': {
+        'name': 'Midas Hand',
+        'price': 30,
+        'desc': '+$2 per unused block at round end.',
+        'trigger': 'on_round_end',
+        'rarity': 'Legendary'
+    },
+    'phoenix_feather': {
+        'name': 'Phoenix Feather',
+        'price': 45,
+        'desc': 'Revive once on death (consumable).',
+        'trigger': 'passive',
+        'rarity': 'Legendary'
+    },
+    'eye_of_ra': {
+        'name': 'Eye of Ra',
+        'price': 60,
+        'desc': 'Global 1.5x score multiplier.',
+        'trigger': 'on_score',
+        'rarity': 'Omega'
+    }
+})
 
 # Sadece Dükkan üretimi için ayrılmış liste
 OMEGA_KEYS = ['dark_matter', 'infinity_stone', 'chronos']
@@ -488,4 +550,57 @@ DEATH_QUOTES = {
         "Reinizializzazione della simulazione...",
         "Errore critico."
     ]
+}
+
+
+# --- ACHIEVEMENTS & UNLOCKS ---
+UNLOCKS = {
+    'tiny_bag': {
+        'threshold': 5000,
+        'name': 'POCKET MONEY',
+        'desc': 'Paid 5k Debt',
+        'reward': 'Unlocks: Start with +$10 & Free Rune'
+    },
+    'blueprint': {
+        'threshold': 10000,
+        'name': 'ARCHITECT',
+        'desc': 'Paid 10k Debt',
+        'reward': 'Unlocks: Blueprint Totem (Mirror Blocks)'
+    },
+    'gamblers_coin': {
+        'threshold': 25000,
+        'name': 'HIGH ROLLER',
+        'desc': 'Paid 25k Debt',
+        'reward': 'Unlocks: Gambler Coin (Cheaper Rerolls)'
+    },
+    'obsidian_wall': {
+        'threshold': 50000,
+        'name': 'DEFENDER',
+        'desc': 'Paid 50k Debt',
+        'reward': 'Unlocks: Obsidian Wall (Slows Enemies)'
+    },
+    'divine_smite': {
+        'threshold': 100000,
+        'name': 'THE PURGER',
+        'desc': 'Paid 100k Debt',
+        'reward': 'Unlocks: Divine Smite (Right-Click Destroy)'
+    },
+    'midas_hand': {
+        'threshold': 250000,
+        'name': 'GOLDEN TOUCH',
+        'desc': 'Paid 250k Debt',
+        'reward': 'Unlocks: Midas Hand (Passive Income)'
+    },
+    'phoenix_feather': {
+        'threshold': 500000,
+        'name': 'IMMORTAL',
+        'desc': 'Paid 500k Debt',
+        'reward': 'Unlocks: Phoenix Feather (Revive 1x)'
+    },
+    'eye_of_ra': {
+        'threshold': 1000000,
+        'name': 'FREEDOM',
+        'desc': 'Debt Cleared',
+        'reward': 'Unlocks: Eye of Ra (1.5x Global Mult)'
+    }
 }

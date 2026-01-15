@@ -7,6 +7,7 @@ import cv2
 import numpy as np
 from settings import *
 from settings import STATE_PLAYING  # Tooltip kontrolü için
+from settings import UNLOCKS
 from languages import LANGUAGES
 
 # --- MENÜ İÇİN UÇUŞAN DEKORATİF BLOK ---
@@ -157,6 +158,35 @@ class TitleLetter:
         else:
             rect = self.original_image.get_rect(center=(self.x, self.y))
             surface.blit(self.original_image, rect)
+
+
+# Simple Notification helper (single definition)
+class Notification:
+    def __init__(self, title, text, duration_frames=120):
+        self.title = title
+        self.text = text
+        self.duration = duration_frames
+        self.age = 0
+        # Slide-in parameters
+        self.slide_in_frames = min(20, max(8, duration_frames // 6))
+        # Compatibility aliases requested by caller code
+        self.message = text
+        self.timer = duration_frames
+        self.slide = 0.0
+        self.width = 320
+        self.height = 64
+        self.dismissed = False
+
+    def update(self):
+        self.age += 1
+        if self.age >= self.duration:
+            self.dismissed = True
+
+    def progress(self):
+        return min(1.0, self.age / float(self.slide_in_frames))
+
+    def remaining(self):
+        return max(0, self.duration - self.age)
 
 class VoidWidget(pygame.sprite.Sprite):
     def __init__(self, x, y, scale=0.5):
@@ -349,6 +379,8 @@ class UIManager:
         # YENİ: Title ve Menu Block
         self.load_title_assets()
         self.menu_blocks = [MenuBlock(random.randint(0, VIRTUAL_W), random.randint(0, VIRTUAL_H)) for _ in range(15)]
+        # Notifications queue
+        self.notifications = []
         
         # Menu Background Randomization
         self.menu_bg_image = None
@@ -548,8 +580,16 @@ class UIManager:
                 self.bg_tiles.append(row_data)
 
     def update(self):
-        self.void_widget.update()
-        self.pharaoh.update()
+        # Update widgets and background animations
+        try:
+            self.void_widget.update()
+        except Exception:
+            pass
+        try:
+            self.pharaoh.update()
+        except Exception:
+            pass
+
         if self.bg_tiles:
             mx, my = pygame.mouse.get_pos()
             rows = len(self.bg_tiles); cols = len(self.bg_tiles[0])
@@ -569,48 +609,73 @@ class UIManager:
                     elif tile['type'] == 'symbol':
                         if currently_hovering and not tile['is_hovered']: tile['flipped_x'] = not tile['flipped_x']
                         tile['is_hovered'] = currently_hovering
-        
-        # Menü bloklarını güncelle
-        for b in self.menu_blocks: b.update()
-        
-        # TITLE FİZİK GÜNCELLEMELERİ
+
+        for b in self.menu_blocks:
+            try: b.update()
+            except Exception: pass
+
+        # Title letter physics
         mouse_pressed = pygame.mouse.get_pressed()[0]
         mx, my = pygame.mouse.get_pos()
-        
-        # 1. Sürükleme Kontrolü
+
         dragging_any = False
         for l in self.title_letters:
             if l.dragging:
                 dragging_any = True
-                if not mouse_pressed: # Mouse bırakıldı
+                if not mouse_pressed:
                     l.dragging = False
                 break
-        
-        # Sürüklemeyi Başlat
+
         if not dragging_any and mouse_pressed:
-            # Tersten (üsttekinden) başla
             for l in reversed(self.title_letters):
-                # Rotasyonlu olduğu için basit rect collision bazen kaçırabilir ama genelde yeterlidir
-                # Daha hassas olması için mesafe kontrolü de eklenebilir
-                dist = math.sqrt((mx - l.x)**2 + (my - l.y)**2)
-                if dist < l.width / 1.5: # Yarıçap kontrolü
+                dist = math.hypot(mx - l.x, my - l.y)
+                if dist < l.width / 1.5:
                     l.dragging = True
                     l.drag_offset_x = mx - l.x
                     l.drag_offset_y = my - l.y
                     break
-        
-        # 2. Fizik Güncellemesi (Hareket ve Yay)
-        for l in self.title_letters:
-            l.update()
 
-        # 3. Çarpışma Kontrolü (Collision Resolution)
-        # Tüm harfleri birbirleriyle karşılaştır (Çift döngü)
+        for l in self.title_letters:
+            try: l.update()
+            except Exception: pass
+
+        # Collision resolution between title letters
         count = len(self.title_letters)
         for i in range(count):
             for j in range(i + 1, count):
-                l1 = self.title_letters[i]
-                l2 = self.title_letters[j]
-                l1.resolve_collision(l2)
+                try:
+                    self.title_letters[i].resolve_collision(self.title_letters[j])
+                except Exception:
+                    pass
+
+        # Update notifications
+        # Update notifications
+        if hasattr(self, 'notifications'):
+            for note in list(self.notifications):
+                try:
+                    # Decrease timer, advance slide
+                    try:
+                        note.timer = getattr(note, 'timer', getattr(note, 'duration', 120)) - 1
+                    except Exception:
+                        note.timer = getattr(note, 'timer', getattr(note, 'duration', 120)) - 1
+                    # Advance slide animation
+                    try:
+                        if getattr(note, 'slide', 0.0) < 1.0:
+                            note.slide = min(1.0, note.slide + 0.1)
+                    except Exception:
+                        note.slide = 1.0
+
+                    # Remove expired
+                    if getattr(note, 'timer', 0) <= 0:
+                        try:
+                            self.notifications.remove(note)
+                        except Exception:
+                            pass
+                except Exception:
+                    try:
+                        self.notifications.remove(note)
+                    except Exception:
+                        pass
 
     def draw_bg(self, surface):
         surface.fill(BG_COLOR)
@@ -980,44 +1045,43 @@ class UIManager:
         
         self.menu_buttons = []
         current_x = panel_start_x
-        
+
         for label, width, color_norm, color_hover, border_norm, border_hover, text_color, font_size in buttons_config:
-            # Create button rectangle
             btn_rect = pygame.Rect(current_x, button_top, width, BTN_H)
-            
+
             # Detect hover state
             is_hovered = btn_rect.collidepoint(mx, my)
             btn_fill_color = color_hover if is_hovered else color_norm
             btn_border_color = border_hover if is_hovered else border_norm
-            
+
             # Draw button fill (rounded)
             pygame.draw.rect(surface, btn_fill_color, btn_rect, border_radius=12)
-            
+
             # Draw main border (3px)
             pygame.draw.rect(surface, btn_border_color, btn_rect, 3, border_radius=12)
-            
+
             # Draw darker outline for definition (1px, darker shade)
             darker_border = tuple(max(0, c - 40) for c in btn_border_color)
             outline_rect = btn_rect.inflate(-2, -2)  # Shrink slightly for inner outline
             pygame.draw.rect(surface, darker_border, outline_rect, 1, border_radius=10)
-            
+
             # Render text with proper font scaling (localized)
             display_label = self.t(label)
             text_font = self._make_font(font_size, bold=True)
             text_surface = text_font.render(display_label, True, text_color)
-            
+
             # Check if text fits - if not, use smaller font
             if text_surface.get_width() > width - 16:  # 8px padding on each side
                 text_font = self._make_font(max(10, font_size - 2), bold=True)
                 text_surface = text_font.render(display_label, True, text_color)
-            
+
             # Center text both horizontally and vertically in button
             text_rect = text_surface.get_rect(center=btn_rect.center)
             surface.blit(text_surface, text_rect)
-            
+
             # Store button for click detection (store key, not localized text)
             self.menu_buttons.append((btn_rect, label))
-            
+
             # Move to next button position
             current_x += width + BTN_MARGIN
         
@@ -1055,6 +1119,18 @@ class UIManager:
         
         coming_soon_text = self.font_bold.render(self.game.get_text("BTN_COMING_SOON"), True, (50, 40, 20))
         surface.blit(coming_soon_text, coming_soon_text.get_rect(center=self.coming_soon_btn_rect.center))
+
+    def show_notification(self, title, message, duration_frames=120):
+        try:
+            n = Notification(title, message, duration_frames=duration_frames)
+            self.notifications.append(n)
+            try:
+                if hasattr(self.game, 'audio'):
+                    self.game.audio.play('clear')
+            except Exception:
+                pass
+        except Exception:
+            pass
 
     def draw_round_select(self, surface, game):
         overlay = pygame.Surface((VIRTUAL_W, VIRTUAL_H), pygame.SRCALPHA)
@@ -1880,145 +1956,83 @@ class UIManager:
         surface.blit(hint, hint.get_rect(center=(cx, btn_y + btn_h + 20)))
 
     def draw_collection(self, surface, game):
-        """Collection screen showing unlocked items with scrolling support"""
-        from settings import COLLECTIBLES
-        
-        # Dark background
-        overlay = pygame.Surface((VIRTUAL_W, VIRTUAL_H), pygame.SRCALPHA)
-        overlay.fill((10, 10, 15, 250))
-        surface.blit(overlay, (0, 0))
-        
-        cx = VIRTUAL_W // 2
+        self.draw_bg(surface)
         
         # Title
-        title = self.title_font.render(self.t('COLLECTION'), True, ACCENT_COLOR)
-        surface.blit(title, title.get_rect(center=(cx, 40)))
+        title = self.title_font.render("COLLECTION", True, ACCENT_COLOR)
+        surface.blit(title, (50, 50))
         
-        # Progress indicator
-        save_data = game.save_manager.get_data()
-        total_paid = save_data['debt_paid']
-        total_debt = save_data['total_debt']
-        remaining = max(0, total_debt - total_paid)
-        unlocked_count = len([item for item in COLLECTIBLES if game.save_manager.is_unlocked(item['id'])])
+        # Get unlocked list from save data
+        unlocked_list = game.save_manager.data.get('unlocked_items', [])
         
-        progress_text = self.font_bold.render(f"{self.t('Unlocked')}: {unlocked_count}/{len(COLLECTIBLES)}", True, (255, 255, 255))
-        surface.blit(progress_text, progress_text.get_rect(center=(cx, 80)))
-        
-        debt_text = self.font_reg.render(f"{self.t('Debt Paid')}: {total_paid:,} / {total_debt:,}", True, (200, 200, 200))
-        surface.blit(debt_text, debt_text.get_rect(center=(cx, 105)))
-        
-        # Grid of collectibles (2 columns, 4 rows = 8 items)
+        # Grid Settings
+        start_x, start_y = 50, 150
+        col_width, row_height = 350, 80
         cols = 2
-        rows = 4
-        card_w = 180
-        card_h = 140
-        gap_x = 30
-        gap_y = 20
         
-        # Calculate total content height
-        total_content_height = rows * card_h + (rows - 1) * gap_y
-        
-        # Scrolling area parameters
-        scroll_area_top = 140
-        scroll_area_height = VIRTUAL_H - scroll_area_top - 80  # Leave room for title and back button
-        
-        # Calculate max scroll (clamp so content doesn't scroll too far)
-        max_scroll = max(0, total_content_height - scroll_area_height)
-        
-        # Clamp scroll value
-        self.collection_scroll_y = max(0, min(self.collection_scroll_y, max_scroll))
-        
-        start_x = cx - (cols * card_w + (cols - 1) * gap_x) // 2
-        start_y = scroll_area_top - self.collection_scroll_y
-        
-        mx, my = pygame.mouse.get_pos()
-        
-        for i, item in enumerate(COLLECTIBLES):
+        hovered_reward = None
+
+        # Iterate through ALL possible unlocks
+        for i, (key, info) in enumerate(UNLOCKS.items()):
             row = i // cols
             col = i % cols
             
-            x = start_x + col * (card_w + gap_x)
-            y = start_y + row * (card_h + gap_y)
+            x = start_x + col * (col_width + 20)
+            y = start_y + row * (row_height + 20) - getattr(self, 'collection_scroll_y', 0)
+            rect = pygame.Rect(x, y, col_width, row_height)
             
-            # Only draw if visible on screen
-            if y + card_h < scroll_area_top or y > VIRTUAL_H - 80:
-                continue
+            is_unlocked = key in unlocked_list
             
-            card_rect = pygame.Rect(x, y, card_w, card_h)
+            # Draw Background
+            bg_color = (40, 40, 50) if is_unlocked else (20, 20, 20)
+            border_color = (255, 215, 0) if is_unlocked else (60, 60, 60)
+            pygame.draw.rect(surface, bg_color, rect, border_radius=8)
+            pygame.draw.rect(surface, border_color, rect, 2, border_radius=8)
+
+            # Hover highlight and reward capture
+            try:
+                if rect.collidepoint(pygame.mouse.get_pos()):
+                    pygame.draw.rect(surface, (255, 255, 255), rect, 2, border_radius=8)
+                    hovered_reward = info.get('reward')
+            except Exception:
+                pass
             
-            is_unlocked = game.save_manager.is_unlocked(item['id'])
-            hover = card_rect.collidepoint(mx, my)
+            # Draw Icon Placeholder (Circle)
+            pygame.draw.circle(surface, border_color, (x + 40, y + 40), 25)
             
-            # Card background
+            # Draw Text
             if is_unlocked:
-                bg_color = (40, 40, 50) if not hover else (50, 50, 65)
-                border_color = (100, 100, 100) if not hover else ACCENT_COLOR
+                name_txt = self.font_bold.render(info.get('name', key), True, (255, 255, 255))
+                desc_txt = self.font_small.render(info.get('desc', ''), True, (180, 180, 180))
             else:
-                bg_color = (20, 20, 25)
-                border_color = (50, 50, 50)
-            
-            pygame.draw.rect(surface, bg_color, card_rect, border_radius=10)
-            pygame.draw.rect(surface, border_color, card_rect, 2, border_radius=10)
-            
-            if is_unlocked:
-                # Show icon (emoji)
-                icon_font = self._make_font(48)
-                icon_surface = icon_font.render(item['icon'], True, (255, 255, 255))
-                surface.blit(icon_surface, icon_surface.get_rect(center=(card_rect.centerx, card_rect.y + 40)))
+                name_txt = self.font_bold.render("LOCKED", True, (100, 100, 100))
+                desc_txt = self.font_small.render(f"Pay ${info.get('threshold', 0):,} Debt", True, (80, 80, 80))
                 
-                # Name
-                name_text = self.font_bold.render(item['name'], True, (255, 255, 255))
-                surface.blit(name_text, name_text.get_rect(center=(card_rect.centerx, card_rect.y + 85)))
-                
-                # Description
-                desc_lines = self._wrap_text(item['desc'], card_w - 20, self.font_small)
-                for j, line in enumerate(desc_lines):
-                    desc_surface = self.font_small.render(line, True, (150, 150, 150))
-                    surface.blit(desc_surface, desc_surface.get_rect(center=(card_rect.centerx, card_rect.y + 105 + j * 15)))
-            else:
-                # Locked silhouette
-                lock_icon = self.font_big.render("🔒", True, (80, 80, 80))
-                surface.blit(lock_icon, lock_icon.get_rect(center=(card_rect.centerx, card_rect.centery - 10)))
-                
-                # Unlock requirement
-                req_text = self.font_small.render(f"Pay {item['unlock_at']:,}", True, (100, 100, 100))
-                surface.blit(req_text, req_text.get_rect(center=(card_rect.centerx, card_rect.centery + 25)))
-        
-        # Draw scrollbar on the right side
-        if max_scroll > 0:
-            scrollbar_x = VIRTUAL_W - 20
-            scrollbar_w = 8
-            scrollbar_h = scroll_area_height
+            surface.blit(name_txt, (x + 80, y + 15))
+            surface.blit(desc_txt, (x + 80, y + 45))
             
-            # Background track
-            track_rect = pygame.Rect(scrollbar_x - scrollbar_w // 2, scroll_area_top, scrollbar_w, scrollbar_h)
-            pygame.draw.rect(surface, (40, 40, 50), track_rect, border_radius=4)
-            
-            # Scroll thumb (handle)
-            thumb_height = max(20, scrollbar_h * scrollbar_h // total_content_height)
-            thumb_y = scroll_area_top + (self.collection_scroll_y / max_scroll) * (scrollbar_h - thumb_height)
-            thumb_rect = pygame.Rect(scrollbar_x - scrollbar_w // 2, thumb_y, scrollbar_w, thumb_height)
-            
-            thumb_color = ACCENT_COLOR if thumb_rect.collidepoint(mx, my) else (100, 100, 100)
-            pygame.draw.rect(surface, thumb_color, thumb_rect, border_radius=4)
-        
-        # Back button
-        btn_w, btn_h = 120, 50
-        btn_x = 30
-        btn_y = VIRTUAL_H - btn_h - 30
-        
-        back_btn = pygame.Rect(btn_x, btn_y, btn_w, btn_h)
-        self.collection_back_button = back_btn
-        
-        hover_back = back_btn.collidepoint(mx, my)
-        btn_color = (80, 60, 100) if hover_back else (50, 40, 70)
-        border_color = ACCENT_COLOR if hover_back else (100, 100, 100)
-        
-        pygame.draw.rect(surface, btn_color, back_btn, border_radius=8)
-        pygame.draw.rect(surface, border_color, back_btn, 2, border_radius=8)
-        
-        back_text = self.font_bold.render(self.t('BACK'), True, (255, 255, 255))
-        surface.blit(back_text, back_text.get_rect(center=back_btn.center))
+        # Back Button (reuse existing logic if any, or ESC to exit)
+        back_txt = self.font_reg.render("[ESC] BACK", True, (255, 255, 255))
+        surface.blit(back_txt, (50, VIRTUAL_H - 50))
+
+        # Tooltip for hovered reward (draw on top)
+        if hovered_reward:
+            mx, my = pygame.mouse.get_pos()
+            # Simple Tooltip Box
+            font = self.font_reg
+            try:
+                text_surf = font.render(hovered_reward, True, (255, 255, 100))
+            except Exception:
+                text_surf = font.render(str(hovered_reward), True, (255, 255, 100))
+            padding = 10
+            bg_rect = pygame.Rect(mx + 15, my + 15, text_surf.get_width() + padding*2, text_surf.get_height() + padding*2)
+            # Ensure tooltip stays on screen
+            if bg_rect.right > VIRTUAL_W: bg_rect.x -= bg_rect.width + 20
+            if bg_rect.bottom > VIRTUAL_H: bg_rect.y -= bg_rect.height + 20
+
+            pygame.draw.rect(surface, (10, 10, 20), bg_rect, border_radius=5)
+            pygame.draw.rect(surface, (255, 255, 255), bg_rect, 1, border_radius=5)
+            surface.blit(text_surf, (bg_rect.x + padding, bg_rect.y + padding))
     
     def _wrap_text(self, text, max_width, font):
         """Helper to wrap text into multiple lines"""
@@ -2286,3 +2300,109 @@ class UIManager:
     def draw_overlay_elements(self, surface):
         """Draw elements that should appear on top of everything else"""
         self.pharaoh.draw(surface)
+        # Draw active notifications (bottom-right stack)
+        try:
+            padding = 12
+            gap = 8
+            base_x = VIRTUAL_W - padding
+            base_y = VIRTUAL_H - padding
+            # Draw from newest to oldest so newest appears at bottom
+            for idx, n in enumerate(reversed(self.notifications)):
+                try:
+                    prog = n.progress()
+                    w = n.width
+                    h = n.height
+                    target_x = base_x - w
+                    target_y = base_y - (idx * (h + gap)) - h
+                    # Slide from below
+                    start_y = VIRTUAL_H + 10
+                    cur_y = int(start_y + (target_y - start_y) * prog)
+
+                    rect = pygame.Rect(target_x, cur_y, w, h)
+                    # Panel background
+                    panel = pygame.Surface((w, h), pygame.SRCALPHA)
+                    panel.fill((18, 18, 20, 220))
+                    surface.blit(panel, (rect.x, rect.y))
+                    # Gold border
+                    pygame.draw.rect(surface, (255, 215, 0), rect, 2, border_radius=6)
+                    # Text
+                    title_s = self.font_bold.render(n.title, True, (255, 215, 140))
+                    txt_s = self.font_small.render(n.text, True, (230, 230, 230))
+                    surface.blit(title_s, (rect.x + 12, rect.y + 8))
+                    surface.blit(txt_s, (rect.x + 12, rect.y + 32))
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        # --- DRAW NOTIFICATIONS (Bottom Right) ---
+        try:
+            if hasattr(self, 'notifications') and self.notifications:
+                # Start from bottom right
+                start_y = VIRTUAL_H - 20
+                # Iterate backwards to stack them upwards
+                for i, note in enumerate(reversed(self.notifications)):
+                    # Animation Logic
+                    try:
+                        if getattr(note, 'slide', 0) < 1.0:
+                            note.slide = min(1.0, note.slide + 0.1)
+                    except Exception:
+                        note.slide = 1.0
+
+                    # Box Dimensions
+                    box_w, box_h = 220, 60
+                    offset_x = (1.0 - getattr(note, 'slide', 1.0)) * 250 # Slide in from right
+                    x = VIRTUAL_W - box_w - 20 + offset_x
+                    y = start_y - (box_h + 10) * (i + 1)
+
+                    # Draw Box (Dark BG + Gold Border)
+                    rect = pygame.Rect(int(x), int(y), box_w, box_h)
+                    try:
+                        pygame.draw.rect(surface, (20, 20, 30), rect, border_radius=8)
+                        pygame.draw.rect(surface, (255, 215, 0), rect, 2, border_radius=8) # Gold border
+                    except Exception:
+                        pass
+
+                    # Draw Text
+                    try:
+                        title_surf = self.font_bold.render(getattr(note, 'title', ''), True, (255, 215, 0))
+                        msg_surf = self.font_small.render(getattr(note, 'message', getattr(note, 'text', '')), True, (200, 200, 200))
+                        surface.blit(title_surf, (rect.x + 10, rect.y + 10))
+                        surface.blit(msg_surf, (rect.x + 10, rect.y + 35))
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    def draw_notifications_explicit(self, surface):
+        """Draw only the notification stack on top of everything."""
+        if not hasattr(self, 'notifications') or not self.notifications:
+            return
+        start_y = VIRTUAL_H - 20
+        for i, note in enumerate(reversed(self.notifications)):
+            try:
+                # Animation math
+                ease_slide = 1.0 - math.pow(1.0 - getattr(note, 'slide', 1.0), 3)
+                offset_x = (1.0 - ease_slide) * 300
+
+                box_w, box_h = 240, 60
+                x = VIRTUAL_W - box_w - 20 + offset_x
+                y = start_y - (box_h + 10) * (i + 1)
+
+                # Draw Shadow
+                s = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
+                pygame.draw.rect(s, (0, 0, 0, 100), s.get_rect(), border_radius=8)
+                surface.blit(s, (x+4, y+4))
+
+                # Draw Box
+                rect = pygame.Rect(int(x), int(y), box_w, box_h)
+                pygame.draw.rect(surface, (30, 30, 40), rect, border_radius=8)
+                pygame.draw.rect(surface, (255, 215, 0), rect, 2, border_radius=8)
+
+                # Draw Text
+                title = self.font_bold.render(getattr(note, 'title', ''), True, (255, 215, 0))
+                msg = self.font_small.render(getattr(note, 'message', getattr(note, 'text', '')), True, (220, 220, 220))
+                surface.blit(title, (rect.x + 10, rect.y + 8))
+                surface.blit(msg, (rect.x + 10, rect.y + 32))
+            except Exception:
+                pass

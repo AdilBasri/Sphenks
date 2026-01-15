@@ -2,6 +2,8 @@
 import json
 import os
 import copy
+from settings import UNLOCKS
+
 
 class SaveManager:
     """Manages save/load operations for player progression data."""
@@ -97,6 +99,35 @@ class SaveManager:
         if item_id not in self.data['unlocked_items']:
             self.data['unlocked_items'].append(item_id)
             self.save_data()
+
+    def get_total_paid(self):
+        """Return cumulative amount the player has paid toward the debt."""
+        return int(self.data.get('debt_paid', 0))
+
+    def check_unlocks(self):
+        """Checks if current debt_paid meets any thresholds. Returns list of NEW unlocks."""
+        current_paid = int(self.data.get('debt_paid', 0))
+        # Ensure list exists
+        if 'unlocked_items' not in self.data:
+            self.data['unlocked_items'] = []
+            
+        newly_unlocked = []
+        
+        for key, info in UNLOCKS.items():
+            # If we passed the threshold AND haven't unlocked it yet
+            try:
+                thresh = int(info.get('threshold', 0))
+            except Exception:
+                thresh = 0
+            if current_paid >= thresh and key not in self.data['unlocked_items']:
+                self.data['unlocked_items'].append(key)
+                newly_unlocked.append(key)
+        
+        # If we found something new, save immediately!
+        if newly_unlocked:
+            self.save_data()
+            
+        return newly_unlocked
     
     def is_unlocked(self, item_id):
         """Check if an item is unlocked."""
