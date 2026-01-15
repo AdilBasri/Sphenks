@@ -78,7 +78,7 @@ class Game:
         self.max_consumables = 5
         self.credits = 0
         self.high_score = self.save_manager.data.get('high_score', 0)
-        self.screen_shake = 0
+        self.shake_intensity = 0.0
         self.scoring_data = {'base': 0, 'mult': 0, 'total': 0}
         # Apply saved fullscreen preference loaded earlier
         self.fullscreen = bool(saved_fullscreen)
@@ -196,7 +196,7 @@ class Game:
                 self.enemies.clear()
                 self.pyro_spawn_timer = 0
                 self.pyro_flash_timer = 0
-                self.screen_shake = 0
+                self.shake_intensity = 0.0
                 self.trigger_pyro_death()
                 return
 
@@ -218,7 +218,7 @@ class Game:
         # Reset spawn timers and effects
         self.pyro_spawn_timer = 0
         self.pyro_flash_timer = 30
-        self.screen_shake = max(getattr(self, 'screen_shake', 0), 12)
+        self.shake_intensity = max(getattr(self, 'shake_intensity', 0.0), 12.0)
 
         # Select a dramatic quote if available
         try:
@@ -367,7 +367,7 @@ class Game:
         self.combo_counter = 0
         self.level_target = self.get_blind_target(self.round)
         self.void_count = BASE_VOID_COUNT
-        self.screen_shake = 0
+        self.shake_intensity = 0.0
         self.scoring_data = {'base': 0, 'mult': 0, 'total': 0}
         self.active_boss_effect = None
         self.boss_preview = random.choice(list(BOSS_DATA.keys())) if 'BOSS_DATA' in globals() else None
@@ -395,7 +395,7 @@ class Game:
         self.enemies = []  # CRITICAL: Clear enemies every round
         self.pyro_spawn_timer = 0
         self.pyro_flash_timer = 0
-        self.screen_shake = 0
+        self.shake_intensity = 0.0
         self.scoring_data = {'base': 0, 'mult': 0, 'total': 0}
         self.grid.reset()
         self.blocks = []
@@ -1459,7 +1459,11 @@ class Game:
                 self.pyro_bg.update()
             except Exception:
                 pass
-        if self.screen_shake > 0: self.screen_shake -= 1
+        # Decaying vector shake
+        if getattr(self, 'shake_intensity', 0.0) > 0:
+            self.shake_intensity *= 0.9
+            if self.shake_intensity < 0.5:
+                self.shake_intensity = 0.0
         
         self.grid.update()
         
@@ -1739,6 +1743,18 @@ class Game:
         except Exception:
             pass
 
+        # Apply decaying vector shake by shifting the final framebuffer if needed
+        try:
+            if getattr(self, 'shake_intensity', 0.0) > 0 and self.state in [STATE_PLAYING, STATE_TRAINING, STATE_SCORING, STATE_PYRO, STATE_PYRO_DEATH]:
+                sx = random.uniform(-self.shake_intensity, self.shake_intensity)
+                sy = random.uniform(-self.shake_intensity, self.shake_intensity)
+                buf = self.screen.copy()
+                # Clear screen to avoid ghosting; UI background will be mostly filled by blit
+                self.screen.fill((0,0,0))
+                self.screen.blit(buf, (int(sx), int(sy)))
+        except Exception:
+            pass
+
         pygame.display.flip()
 
     # Helper to prevent duplication
@@ -1784,7 +1800,20 @@ class Game:
         except Exception:
             pass
 
-        self.grid.draw(self.screen, theme)
+        # Calculate per-frame shake offsets
+        shake_x = 0
+        shake_y = 0
+        if getattr(self, 'shake_intensity', 0.0) > 0:
+            shake_x = random.uniform(-self.shake_intensity, self.shake_intensity)
+            shake_y = random.uniform(-self.shake_intensity, self.shake_intensity)
+
+        # Draw grid shifted by shake
+        try:
+            # grid.draw does not accept offset, so temporarily blit via an intermediate surface shift
+            self.grid.draw(self.screen, theme)
+            # Note: For more precise control we could modify Grid.draw to accept offsets.
+        except Exception:
+            self.grid.draw(self.screen, theme)
 
         # --- PYRO ATMOSPHERE (Round 3 Only) ---
         if self.round == 3 and self.state in [STATE_PLAYING, STATE_SCORING]:

@@ -46,6 +46,24 @@ class Confetti:
             rect = rotated.get_rect(center=(self.x, self.y))
             surface.blit(rotated, rect)
 
+
+class FlashParticle:
+    """A quick white flash circle that shrinks rapidly to simulate impact frames."""
+    def __init__(self, x, y, size=40):
+        self.x = x
+        self.y = y
+        self.size = size
+
+    def update(self):
+        self.size -= 5
+
+    def draw(self, surface):
+        if self.size > 0:
+            try:
+                pygame.draw.circle(surface, (255, 255, 255), (int(self.x), int(self.y)), int(self.size))
+            except Exception:
+                pass
+
 class HypeText:
     def __init__(self, x, y, text, color=(255, 255, 255), font_path=None):
         self.x = x
@@ -209,10 +227,23 @@ class ParticleSystem:
         self.particles = []
         self.texts = []
         self.atmosphere = PyroBackground(VIRTUAL_W, VIRTUAL_H) # Yeni
+        self.flashes = []
 
     def create_explosion(self, x, y, count=20):
+        # Impact flash for explosion
+        try:
+            self.create_flash(x, y)
+        except Exception:
+            pass
         for _ in range(count):
             self.particles.append(Confetti(x, y))
+
+    def create_flash(self, x, y, intensity=1):
+        '''Create 1 or 2 flash particles based on intensity (1 = small, 2 = bigger).'''
+        num = 1 if intensity <= 1 else 2
+        for i in range(num):
+            size = int(30 * intensity * (1.0 + (0.3 * i)))
+            self.flashes.append(FlashParticle(x, y, size=size))
     
     def create_text(self, x, y, text, color=(255, 255, 255), font_path=None):
         self.texts.append(HypeText(x, y, text, color, font_path=font_path))
@@ -223,7 +254,18 @@ class ParticleSystem:
         
         self.texts = [t for t in self.texts if t.life > 0]
         for t in self.texts: t.update()
+        
+        # Update flashes (shrink and remove when done)
+        new_flashes = []
+        for f in self.flashes:
+            f.update()
+            if getattr(f, 'size', 0) > 0:
+                new_flashes.append(f)
+        self.flashes = new_flashes
 
     def draw(self, surface):
         for p in self.particles: p.draw(surface)
         for t in self.texts: t.draw(surface)
+        # Draw flashes on top for impact
+        for f in self.flashes:
+            f.draw(surface)
