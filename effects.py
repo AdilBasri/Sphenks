@@ -64,6 +64,63 @@ class FlashParticle:
             except Exception:
                 pass
 
+
+class BoardClearEffect:
+    def __init__(self, start_x, start_y, cell_size, grid_size=7):
+        self.particles = []
+        self.life = 60
+        # Calculate center of grid
+        center_x = start_x + (grid_size * cell_size) / 2
+        center_y = start_y + (grid_size * cell_size) / 2
+        # Create a particle for EVERY cell in the grid
+        for r in range(grid_size):
+            for c in range(grid_size):
+                px = start_x + c * cell_size
+                py = start_y + r * cell_size
+                # Calculate angle from center for explosion velocity
+                dx = (px + cell_size/2) - center_x
+                dy = (py + cell_size/2) - center_y
+                angle = math.atan2(dy, dx)
+                speed = random.uniform(5, 15)
+                vel_x = math.cos(angle) * speed
+                vel_y = math.sin(angle) * speed
+                # Color: Random bright colors or Gold
+                try:
+                    color = random.choice(list(SHAPE_COLORS.values()))
+                except Exception:
+                    color = (255, 200, 50)
+                self.particles.append({
+                    'x': px, 'y': py,
+                    'vx': vel_x, 'vy': vel_y,
+                    'w': cell_size - 2, 'h': cell_size - 2,
+                    'color': color,
+                    'life': random.randint(40, 60)
+                })
+
+    def update(self):
+        self.life -= 1
+        for p in self.particles:
+            p['x'] += p['vx']
+            p['y'] += p['vy']
+            p['vx'] *= 0.95 # Friction
+            p['vy'] *= 0.95
+            p['w'] *= 0.95 # Shrink
+            p['h'] *= 0.95
+            p['life'] -= 1
+
+    def draw(self, surface):
+        for p in self.particles:
+            if p['life'] > 0 and p['w'] > 1 and p['h'] > 1:
+                rect = pygame.Rect(p['x'], p['y'], p['w'], p['h'])
+                try:
+                    pygame.draw.rect(surface, p['color'], rect, border_radius=4)
+                    pygame.draw.rect(surface, (255, 255, 255), rect.inflate(-4, -4), 1, border_radius=4)
+                except Exception:
+                    try:
+                        pygame.draw.rect(surface, p['color'], rect)
+                    except Exception:
+                        pass
+
 class HypeText:
     def __init__(self, x, y, text, color=(255, 255, 255), font_path=None):
         self.x = x
@@ -228,6 +285,7 @@ class ParticleSystem:
         self.texts = []
         self.atmosphere = PyroBackground(VIRTUAL_W, VIRTUAL_H) # Yeni
         self.flashes = []
+        self.board_clears = []
 
     def create_explosion(self, x, y, count=20):
         # Impact flash for explosion
@@ -263,9 +321,32 @@ class ParticleSystem:
                 new_flashes.append(f)
         self.flashes = new_flashes
 
+        # Update board clear effects
+        new_board = []
+        for bc in self.board_clears:
+            try:
+                bc.update()
+                if getattr(bc, 'life', 0) > 0:
+                    new_board.append(bc)
+            except Exception:
+                pass
+        self.board_clears = new_board
+
     def draw(self, surface):
         for p in self.particles: p.draw(surface)
         for t in self.texts: t.draw(surface)
         # Draw flashes on top for impact
         for f in self.flashes:
             f.draw(surface)
+        # Draw board clear effects (below UI but above grid)
+        for bc in self.board_clears:
+            try:
+                bc.draw(surface)
+            except Exception:
+                pass
+
+    def trigger_board_clear(self, start_x, start_y, cell_size, grid_size=7):
+        try:
+            self.board_clears.append(BoardClearEffect(start_x, start_y, cell_size, grid_size))
+        except Exception:
+            pass

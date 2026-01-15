@@ -1224,6 +1224,35 @@ class Game:
                                 
                                 total_clears = len(cr) + len(cc)
                                 cleared_cells_count = total_clears * GRID_SIZE
+
+                                # --- PERFECT CLEAR CHECK ---
+                                is_empty = True
+                                for rr in range(GRID_SIZE):
+                                    for cc_i in range(GRID_SIZE):
+                                        if self.grid.grid[rr][cc_i] is not None:
+                                            is_empty = False
+                                            break
+                                    if not is_empty:
+                                        break
+                                if is_empty:
+                                    try:
+                                        self.particle_system.trigger_board_clear(GRID_OFFSET_X, GRID_OFFSET_Y, TILE_SIZE)
+                                    except Exception:
+                                        pass
+                                    try:
+                                        self.particle_system.create_text(self.w//2, self.h//2, "PERFECT!", (255, 215, 0), font_path=self.font_name)
+                                    except Exception:
+                                        pass
+                                    # Large shake + cap
+                                    self.shake_intensity = min(50.0, getattr(self, 'shake_intensity', 0.0) + 30.0)
+                                    try:
+                                        self.audio.play('clear')
+                                    except Exception:
+                                        pass
+                                    try:
+                                        self.score += 5000
+                                    except Exception:
+                                        pass
                                 
                                 # Trigger Pharaoh speech on big plays
                                 if total_clears >= 2:
@@ -1254,7 +1283,8 @@ class Game:
                                     self.credits += rune_bonuses['money']
                                     
                                     self.combo_counter += 1
-                                    self.screen_shake = 2 * total_clears
+                                    # small shake for clears
+                                    self.shake_intensity = min(50.0, getattr(self, 'shake_intensity', 0.0) + (2 * total_clears))
                                     self.particle_system.atmosphere.trigger_shake(10, 3) 
                                     self.audio.play('clear')
                                     
@@ -1547,7 +1577,7 @@ class Game:
                         try:
                             self.particle_system.atmosphere.trigger_shake(15, 6)
                         except Exception:
-                            self.screen_shake = 6
+                            self.shake_intensity = min(50.0, getattr(self, 'shake_intensity', 0.0) + 6.0)
                         # Reset position
                         self.tutorial_enemy['x'] = 100.0
                         self.tutorial_enemy['y'] = 100.0
