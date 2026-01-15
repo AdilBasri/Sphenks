@@ -3,6 +3,7 @@ import pygame
 import sys
 import random
 import math
+from network import LeaderboardManager
 import os
 from settings import *
 from settings import USE_FULLSCREEN, WINDOW_W, WINDOW_H, STATE_DEBT, COLLECTIBLES, STATE_COLLECTION, STATE_SETTINGS, STATE_TRAINING, RESOLUTIONS, STATE_INTRO, STATE_DEMO_END, STATE_COMING_SOON
@@ -69,6 +70,9 @@ class Game:
         self.input_cooldown = 0
         # Reset progress confirmation flag
         self.show_reset_confirm = False
+
+        self.lb_manager = LeaderboardManager()
+        self.lb_manager.fetch_scores()
 
         # Core game state defaults
         self.state = STATE_INTRO
@@ -490,12 +494,22 @@ class Game:
             
             # Check for Demo End (Ante 8 Boss completion)
             if self.ante == 8 and self.round == 3 and not self.endless_mode:
+                try:
+                    if getattr(self, 'lb_manager', None):
+                        self.lb_manager.submit_score("SEN", self.score)
+                except Exception:
+                    pass
                 self.state = STATE_DEMO_END
             else:
                 self.state = STATE_LEVEL_COMPLETE
                 self.generate_shop()
         else:
             self.audio.play('gameover')
+            try:
+                if getattr(self, 'lb_manager', None):
+                    self.lb_manager.submit_score("SEN", self.score)
+            except Exception:
+                pass
             self.state = STATE_GAME_OVER
             self.crt.trigger_aberration(amount=3, duration=20)
             if self.score > self.high_score:
@@ -870,6 +884,39 @@ class Game:
                         self.audio.play('select')
 
             if self.state == STATE_MENU:
+                # --- Leaderboard Widget Kontrolü ---
+                mx, my = pygame.mouse.get_pos()
+
+                # --- WIDGET KONTROLÜ ---
+                widget_rect = pygame.Rect(VIRTUAL_W - 220, 60, 200, 40)
+
+                # Widget açıksa: panel dışına tıklanırsa kapat
+                if getattr(self, 'lb_manager', None) and getattr(self.lb_manager, 'is_expanded', False):
+                    panel_rect = pygame.Rect(VIRTUAL_W//2 - 200, 100, 400, 300)
+                    if event.type == pygame.MOUSEBUTTONDOWN:
+                        # event.pos kullanmaya çalış, yoksa mouse pozisyonu ile devam et
+                        try:
+                            ex, ey = event.pos
+                        except Exception:
+                            ex, ey = mx, my
+                        if not panel_rect.collidepoint(ex, ey):
+                            self.lb_manager.is_expanded = False
+                    return
+
+                # Widget kapalıysa: mini widget'a tıklanırsa aç
+                if getattr(self, 'lb_manager', None):
+                    if event.type == pygame.MOUSEBUTTONDOWN:
+                        try:
+                            ex, ey = event.pos
+                        except Exception:
+                            ex, ey = mx, my
+                        if widget_rect.collidepoint(ex, ey):
+                            try: self.audio.play('select')
+                            except Exception: pass
+                            self.lb_manager.is_expanded = True
+                            return
+
+                # -----------------------
                 # Handle reset confirmation first (if active)
                 if self.show_reset_confirm:
                     if event.type == pygame.MOUSEBUTTONDOWN:

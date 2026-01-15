@@ -1120,6 +1120,13 @@ class UIManager:
         coming_soon_text = self.font_bold.render(self.game.get_text("BTN_COMING_SOON"), True, (50, 40, 20))
         surface.blit(coming_soon_text, coming_soon_text.get_rect(center=self.coming_soon_btn_rect.center))
 
+        # --- Liderlik Tablosu Widget (Çizim çağrısı) ---
+        if hasattr(self.game, 'lb_manager'):
+            try:
+                self.draw_leaderboard_widget(surface, self.game.lb_manager)
+            except Exception:
+                pass
+
     def show_notification(self, title, message, duration_frames=120):
         try:
             n = Notification(title, message, duration_frames=duration_frames)
@@ -1219,6 +1226,47 @@ class UIManager:
                 btn_txt = self.font_bold.render(self.t('SELECT'), True, (0,0,0))
                 surface.blit(btn_txt, btn_txt.get_rect(center=btn_rect.center))
                 self.select_buttons.append(btn_rect)
+
+    def draw_leaderboard_widget(self, surface, manager):
+        # 1. Mini Widget (Sağ Üst)
+        x, y, w, h = VIRTUAL_W - 220, 60, 200, 40
+        rect = pygame.Rect(x, y, w, h)
+
+        s = pygame.Surface((w, h), pygame.SRCALPHA)
+        pygame.draw.rect(s, (0, 0, 0, 150), s.get_rect(), border_radius=5)
+        surface.blit(s, (x, y))
+
+        # Altın Çerçeve (Hover)
+        mx, my = pygame.mouse.get_pos()
+        if rect.collidepoint(mx, my) or getattr(manager, 'is_expanded', False):
+            pygame.draw.rect(surface, (255, 215, 0), rect, 2, border_radius=5)
+
+        # Yazı
+        txt = "Loading..." if getattr(manager, 'status', '') == 'LOADING' else f"#{getattr(manager, 'user_rank', '?')} SEN: {getattr(manager, 'user_best', 0):,}"
+        t_surf = self.font_small.render(txt, True, (255, 255, 255))
+        surface.blit(t_surf, (rect.centerx - t_surf.get_width()//2, rect.centery - t_surf.get_height()//2))
+
+        # 2. Açılır Panel
+        if getattr(manager, 'is_expanded', False):
+            overlay = pygame.Surface((VIRTUAL_W, VIRTUAL_H), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 200))
+            surface.blit(overlay, (0,0))
+
+            panel_rect = pygame.Rect(VIRTUAL_W//2 - 200, 100, 400, 300)
+            pygame.draw.rect(surface, (20, 20, 30), panel_rect, border_radius=10)
+            pygame.draw.rect(surface, (255, 215, 0), panel_rect, 2, border_radius=10)
+
+            head = self.font_bold.render("LIDERLIK TABLOSU", True, (255, 215, 0))
+            surface.blit(head, (panel_rect.centerx - head.get_width()//2, panel_rect.y + 20))
+
+            # Liste Çizimi
+            start_y = panel_rect.y + 60
+            for i, score in enumerate(getattr(manager, 'scores', [])[:5]):
+                row_y = start_y + i * 35
+                color = (100, 255, 100) if score.get('name') == 'SEN' else (220, 220, 220)
+                row_txt = f"{score.get('rank', i+1)}. {score.get('name', '???')} - {score.get('score', 0):,}"
+                r_surf = self.font_reg.render(row_txt, True, color)
+                surface.blit(r_surf, (panel_rect.x + 30, row_y))
 
     def draw_hud_elements(self, surface, game):
         self.void_widget.draw(surface)

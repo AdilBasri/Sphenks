@@ -1,8 +1,9 @@
 {
     "total_debt": 1000000,
-    "debt_paid": 9955,
+    "debt_paid": 12770,
     "unlocked_items": [
-        "tiny_bag"
+        "tiny_bag",
+        "blueprint"
     ],
     "tutorial_complete": false,
     "settings": {
