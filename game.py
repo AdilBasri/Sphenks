@@ -10,7 +10,7 @@ from languages import LANGUAGES
 from grid import Grid
 import intro
 from block import Block
-from effects import ParticleSystem, BossAtmosphere
+from effects import ParticleSystem, PyroBackground
 from totems import Totem, TotemLogic, TOTEM_DATA, OMEGA_KEYS
 from runes import Rune, RUNE_DATA
 from ui import UIManager       
@@ -133,6 +133,11 @@ class Game:
         pygame.mixer.music.load(resource_path("assets/intro_audio.mp3"))
         pygame.mixer.music.play()
         self.particle_system = ParticleSystem()
+        # Pyro background (dynamic atmosphere for Round 3)
+        try:
+            self.pyro_bg = PyroBackground(VIRTUAL_W, VIRTUAL_H)
+        except Exception:
+            self.pyro_bg = None
 
         # Grid and positioning
         self.grid = Grid()
@@ -1448,6 +1453,12 @@ class Game:
         
         self.ui.update()
         self.particle_system.update()
+        # Update pyro atmosphere if present
+        if getattr(self, 'pyro_bg', None):
+            try:
+                self.pyro_bg.update()
+            except Exception:
+                pass
         if self.screen_shake > 0: self.screen_shake -= 1
         
         self.grid.update()
@@ -1766,24 +1777,29 @@ class Game:
 
     def _draw_gameplay_elements(self):
         theme = self.get_current_theme()
-        self.particle_system.atmosphere.get_shake_offset() # Tick shake
+        # Tick shake on pyro atmosphere (compat)
+        try:
+            if getattr(self.particle_system, 'atmosphere', None):
+                self.particle_system.atmosphere.get_shake_offset()
+        except Exception:
+            pass
+
         self.grid.draw(self.screen, theme)
-        
+
         # --- PYRO ATMOSPHERE (Round 3 Only) ---
         if self.round == 3 and self.state in [STATE_PLAYING, STATE_SCORING]:
-            # 1. Dark Red Vignette/Overlay (pulsing)
-            pyro_overlay = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
-            pulse = (math.sin(pygame.time.get_ticks() * 0.003) + 1) * 0.5 * 20 + 30
-            pyro_overlay.fill((50, 0, 0, int(pulse)))
-            self.screen.blit(pyro_overlay, (0, 0))
+            if getattr(self, 'pyro_bg', None):
+                try:
+                    self.pyro_bg.draw(self.screen)
+                except Exception:
+                    pass
 
-            # 2. Draw Pyro Enemies (if they exist in list)
+            # Draw Pyro Enemies (if they exist in list) on top of the background
             for enemy in self.enemies:
                 ex, ey = enemy['rect'].center
-                # Draw simple enemy visual if sprite missing
                 pygame.draw.circle(self.screen, (0,0,0), (ex+2, ey+2), 16) # Shadow
-                pygame.draw.circle(self.screen, (180,20,20), (ex, ey), 15) # Red Body
-                pygame.draw.circle(self.screen, (255,255,255), (ex, ey), 5) # Eye
+                pygame.draw.circle(self.screen, (180,20,20), (ex, ey), 15) # Body
+                pygame.draw.circle(self.screen, (255,255,255), (ex, ey), 10) # Eye
         self.ui.draw_sidebar(self.screen, self)
         self.ui.draw_hand_bg(self.screen)
         self.ui.draw_top_bar(self.screen, self)

@@ -97,25 +97,78 @@ class HypeText:
                 surface.blit(scaled_shadow, (rect.x + 3, rect.y + 3))
                 surface.blit(scaled_text, rect)
 
-class BossAtmosphere:
-    def __init__(self, screen_width, screen_height):
+class PyroBackground:
+    def __init__(self, w, h):
+        self.w = w
+        self.h = h
+        try:
+            self.font = pygame.font.SysFont("Courier", 16, bold=True)
+        except Exception:
+            self.font = pygame.font.Font(None, 16)
+        
+        # 1. Digital Streams (Matrix Rain moving UP)
+        self.streams = []
+        self.columns = max(1, int(w / 20))
+        for i in range(self.columns):
+            self.streams.append({
+                'x': i * 20,
+                'y': random.randint(-500, h),
+                'speed': random.uniform(2.0, 5.0),
+                'chars': [str(random.randint(0, 1)) for _ in range(random.randint(5, 15))],
+                'alpha': random.randint(50, 150) # Faint visibility
+            })
+            
+        # 2. Vignette Surface (Pre-calculated gradient)
+        self.vignette = pygame.Surface((w, h), pygame.SRCALPHA)
+        self._create_radial_gradient()
+        
+        self.pulse_timer = 0.0
+        # Shake support for compatibility with existing calls
         self.shake_timer = 0
         self.shake_magnitude = 0
-        self.vignette_surface = pygame.Surface((screen_width, screen_height), pygame.SRCALPHA)
-        self.create_vignette()
 
-    def create_vignette(self):
-        """Kenarları karanlık/kırmızımsı bir overlay oluşturur."""
-        # Basitçe tüm ekranı kaplayan kırmızı bir tül yapıyoruz, alpha değerini draw'da değiştireceğiz
-        self.vignette_surface.fill((50, 0, 0)) 
+    def _create_radial_gradient(self):
+        # Create a transparent center and dark red corners
+        center = (self.w // 2, self.h // 2)
+        max_dist = math.hypot(center[0], center[1])
+        for y in range(self.h):
+            for x in range(self.w):
+                dist = math.hypot(x - center[0], y - center[1])
+                # Normalize distance (0.0 center, 1.0 corners)
+                norm = dist / (max_dist * 0.7)
+                if norm > 1: norm = 1
+                if norm < 0.4: # Safe zone in middle
+                    alpha = 0
+                else:
+                    # Smooth step for edges
+                    alpha = int((norm - 0.4) * 2 * 255)
+                if alpha > 0:
+                    # Deep Dark Red
+                    try:
+                        self.vignette.set_at((x, y), (50, 0, 10, min(255, alpha)))
+                    except Exception:
+                        # set_at can be slow; ignore failures on systems without per-pixel alpha support
+                        pass
+
+    def update(self):
+        self.pulse_timer += 0.05
+        
+        # Move streams up
+        for s in self.streams:
+            s['y'] -= s['speed']
+            # Reset if fully off screen
+            if s['y'] < -300:
+                s['y'] = self.h + random.randint(10, 100)
+                s['speed'] = random.uniform(2.0, 5.0)
+                # Randomize content occasionally
+                if random.random() < 0.1:
+                    s['chars'] = [str(random.randint(0, 1)) for _ in range(random.randint(5, 15))]
 
     def trigger_shake(self, duration=15, magnitude=5):
-        """Ekranı sallar."""
         self.shake_timer = duration
         self.shake_magnitude = magnitude
 
     def get_shake_offset(self):
-        """Çizim yaparken sahneyi ne kadar kaydıracağımızı döndürür."""
         if self.shake_timer > 0:
             self.shake_timer -= 1
             offset_x = random.randint(-self.shake_magnitude, self.shake_magnitude)
@@ -123,24 +176,39 @@ class BossAtmosphere:
             return offset_x, offset_y
         return 0, 0
 
-    def draw_overlay(self, surface, intensity=0.0):
-        """
-        intensity (0.0 - 1.0): Tehlike seviyesi.
-        0.0: Görünmez
-        1.0: Çok yoğun kırmızı/karanlık atmosfer
-        """
-        if intensity > 0:
-            # Cap the alpha to a maximum of 80 (out of 255) to keep game visible
-            # intensity goes 0.0 to 1.0, alpha goes 0 to 80
-            alpha = min(80, int(intensity * 100))
-            self.vignette_surface.set_alpha(alpha)
-            surface.blit(self.vignette_surface, (0, 0))
+    def draw(self, surface):
+        # 1. Draw Digital Streams
+        for s in self.streams:
+            for i, char in enumerate(s['chars']):
+                # Fade out tail
+                alpha = s['alpha'] - (i * 10)
+                if alpha <= 0: continue
+                txt = self.font.render(char, True, (200, 50, 50)) # Bright Red Text
+                try:
+                    txt.set_alpha(alpha)
+                except Exception:
+                    pass
+                surface.blit(txt, (s['x'], s['y'] + (i * 14)))
+        # 2. Draw Pulsing Vignette
+        # Sine wave breathing: 0.8 to 1.2 scale of alpha
+        pulse = (math.sin(self.pulse_timer) + 1) * 0.5 # 0.0 to 1.0
+        current_alpha = 150 + int(pulse * 105) # 150 to 255
+        # Draw cached vignette
+        try:
+            surface.blit(self.vignette, (0,0))
+        except Exception:
+            pass
+        # Dynamic RED flash overlay at peaks
+        if pulse > 0.8: # Peak of breath -> Danger Flash
+            flash = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+            flash.fill((255, 0, 0, int((pulse-0.8)*5 * 50)))
+            surface.blit(flash, (0,0))
 
 class ParticleSystem:
     def __init__(self):
         self.particles = []
         self.texts = []
-        self.atmosphere = BossAtmosphere(VIRTUAL_W, VIRTUAL_H) # Yeni
+        self.atmosphere = PyroBackground(VIRTUAL_W, VIRTUAL_H) # Yeni
 
     def create_explosion(self, x, y, count=20):
         for _ in range(count):
