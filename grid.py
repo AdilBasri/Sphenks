@@ -16,6 +16,11 @@ class Grid:
         # --- REAKTİF ÖZELLİKLER ---
         self.pulse_intensity = 0 
         self.border_pulse = 0 
+        # --- SPRING PHYSICS (SCALE) ---
+        self.scale = 1.0
+        self.scale_velocity = 0.0
+        self.spring_stiffness = 0.1
+        self.spring_damping = 0.8
 
     def update_position(self, screen_width, screen_height):
         # Position is controlled by settings; return current offsets
@@ -32,6 +37,10 @@ class Grid:
         self.pulse_intensity = 120 
         self.border_pulse = 6 
 
+    def trigger_bump(self, amount=0.05):
+        """External trigger to give the grid a small impulse to the scale velocity."""
+        self.scale_velocity += amount
+
     def update(self):
         """Parlaklığı normale döndür"""
         if self.pulse_intensity > 0:
@@ -41,6 +50,21 @@ class Grid:
         if self.border_pulse > 0:
             self.border_pulse -= 0.8 
             if self.border_pulse < 0: self.border_pulse = 0
+
+        # --- Spring physics for scale (simple Hooke + damping) ---
+        # Hooke's Law: Force = -k * x
+        target_scale = 1.0
+        displacement = self.scale - target_scale
+        force = -self.spring_stiffness * displacement
+
+        self.scale_velocity += force
+        self.scale_velocity *= self.spring_damping
+        self.scale += self.scale_velocity
+
+        # Prevent tiny micro-oscillations
+        if abs(displacement) < 0.001 and abs(self.scale_velocity) < 0.001:
+            self.scale = 1.0
+            self.scale_velocity = 0.0
 
     def place_stones(self, count):
         import random
@@ -240,12 +264,61 @@ class Grid:
                             pygame.draw.circle(self.surface, (0,0,0,100), rect.center, 6)
                             pygame.draw.circle(self.surface, rune.color, rect.center, 4)
 
-        draw_rect = self.rect
-        border_thickness = 3 + int(self.border_pulse)
-        pygame.draw.rect(screen, ACCENT_COLOR, draw_rect.inflate(6 + self.border_pulse, 6 + self.border_pulse), border_thickness, border_radius=8)
-        
-        shadow_rect = draw_rect.move(10, 10)
-        shadow_surf = pygame.Surface(draw_rect.size, pygame.SRCALPHA)
+        # Compose an output surface that includes the grid and its border so it scales together
+        w, h = self.surface.get_size()
+        out_surf = pygame.Surface((w, h), pygame.SRCALPHA)
+        out_surf.blit(self.surface, (0, 0))
+
+        # previous simple border removed in favor of stylized frame after scaling
+
+        # Scale the composed surface according to spring scale
+        scaled_w = max(1, int(w * self.scale))
+        scaled_h = max(1, int(h * self.scale))
+        try:
+            scaled_surf = pygame.transform.smoothscale(out_surf, (scaled_w, scaled_h))
+        except Exception:
+            scaled_surf = pygame.transform.scale(out_surf, (scaled_w, scaled_h))
+
+        scaled_rect = scaled_surf.get_rect(center=self.rect.center)
+
+        # Draw shadow for the scaled rect
+        shadow_surf = pygame.Surface(scaled_rect.size, pygame.SRCALPHA)
         shadow_surf.fill((0, 0, 0, 100))
-        screen.blit(shadow_surf, shadow_rect)
-        screen.blit(self.surface, draw_rect)
+        screen.blit(shadow_surf, scaled_rect.move(10, 10))
+
+        # Blit the scaled grid (centered)
+        screen.blit(scaled_surf, scaled_rect)
+
+        # --- CYBER-EGYPTIAN FRAME ---
+        # Calculate base rect for the frame (inflated slightly around the scaled grid)
+        frame_rect = scaled_rect.inflate(10, 10)
+        
+        # 1. Inner Thin Line (Tech feel)
+        try:
+            pygame.draw.rect(screen, ACCENT_COLOR, frame_rect, 1, border_radius=2)
+        except TypeError:
+            pygame.draw.rect(screen, ACCENT_COLOR, frame_rect, 1)
+        
+        # 2. Outer Thick Corners (Cartouche style)
+        corner_len = 20
+        thick = 4
+        # Top-Left Corner
+        pygame.draw.line(screen, ACCENT_COLOR, frame_rect.topleft, (frame_rect.left + corner_len, frame_rect.top), thick)
+        pygame.draw.line(screen, ACCENT_COLOR, frame_rect.topleft, (frame_rect.left, frame_rect.top + corner_len), thick)
+        # Top-Right Corner
+        pygame.draw.line(screen, ACCENT_COLOR, frame_rect.topright, (frame_rect.right - corner_len, frame_rect.top), thick)
+        pygame.draw.line(screen, ACCENT_COLOR, frame_rect.topright, (frame_rect.right, frame_rect.top + corner_len), thick)
+        # Bottom-Left Corner
+        pygame.draw.line(screen, ACCENT_COLOR, frame_rect.bottomleft, (frame_rect.left + corner_len, frame_rect.bottom), thick)
+        pygame.draw.line(screen, ACCENT_COLOR, frame_rect.bottomleft, (frame_rect.left, frame_rect.bottom - corner_len), thick)
+        # Bottom-Right Corner
+        pygame.draw.line(screen, ACCENT_COLOR, frame_rect.bottomright, (frame_rect.right - corner_len, frame_rect.bottom), thick)
+        pygame.draw.line(screen, ACCENT_COLOR, frame_rect.bottomright, (frame_rect.right, frame_rect.bottom - corner_len), thick)
+        
+        # 3. Decorative Mid-Points (Gold Dots)
+        mid_x = frame_rect.centerx
+        mid_y = frame_rect.centery
+        pygame.draw.circle(screen, ACCENT_COLOR, (mid_x, frame_rect.top), 4)
+        pygame.draw.circle(screen, ACCENT_COLOR, (mid_x, frame_rect.bottom), 4)
+        pygame.draw.circle(screen, ACCENT_COLOR, (frame_rect.left, mid_y), 4)
+        pygame.draw.circle(screen, ACCENT_COLOR, (frame_rect.right, mid_y), 4)

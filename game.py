@@ -1051,6 +1051,11 @@ class Game:
                             gr, gc = self.get_grid_pos(check_x, check_y)
                             if gr is not None and gc is not None and self.grid.is_valid_position(self.held_block, gr, gc):
                                 self.grid.place_block(self.held_block, gr, gc)
+                                # Placement bump disabled: constant small shakes are tiring
+                                # try:
+                                #     self.grid.trigger_bump(0.05)
+                                # except Exception:
+                                #     pass
                                 if self.held_block in self.blocks:
                                     self.blocks.remove(self.held_block)
                                 try: self.audio.play('place')
@@ -1183,6 +1188,11 @@ class Game:
                                             return 
 
                                 self.grid.place_block(self.held_block, gr, gc)
+                                # Placement bump disabled: constant small shakes are tiring
+                                # try:
+                                #     self.grid.trigger_bump(0.05)
+                                # except Exception:
+                                #     pass
                                 self.last_grid_pos = (gr, gc)
                                 self.last_placed_block_tag = getattr(self.held_block, 'tag', 'NONE')
                                 
@@ -1218,7 +1228,11 @@ class Game:
                                         self.ui.pharaoh.say(random.choice(speech_list))
                                 
                                 if total_clears > 0:
-                                    self.grid.trigger_beat() 
+                                    self.grid.trigger_beat()
+                                    try:
+                                        self.grid.trigger_bump(0.2)
+                                    except Exception:
+                                        pass
                                     self.crt.trigger_aberration(amount=2, duration=5)
 
                                     base_points += total_clears * SCORE_PER_LINE
@@ -1284,10 +1298,8 @@ class Game:
                                 if self.state != STATE_SCORING: self.refill_hand()
                             else:
                                 self.audio.play('hit')
-                                self.held_block.rect.topleft = self.held_block.original_pos 
-                        else:
-                            self.held_block.rect.topleft = self.held_block.original_pos
-                        
+                                self.held_block.rect.topleft = self.held_block.original_pos
+                                
                         self.held_block.dragging = False
                         self.held_block = None
 
