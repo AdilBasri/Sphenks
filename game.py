@@ -7,6 +7,7 @@ from network import LeaderboardManager
 import os
 from settings import *
 from settings import USE_FULLSCREEN, WINDOW_W, WINDOW_H, STATE_DEBT, COLLECTIBLES, STATE_COLLECTION, STATE_SETTINGS, STATE_TRAINING, RESOLUTIONS, STATE_INTRO, STATE_DEMO_END, STATE_COMING_SOON
+from settings import COUNTRIES
 from languages import LANGUAGES
 from grid import Grid
 import intro
@@ -72,7 +73,24 @@ class Game:
         self.show_reset_confirm = False
 
         self.lb_manager = LeaderboardManager()
-        self.lb_manager.fetch_scores()
+
+        # --- Profile state variables ---
+        self.show_profile_setup = False
+        self.profile_input_text = ""
+        # Try to default to TR index
+        try:
+            self.profile_country_idx = next(i for i, (c, n) in enumerate(COUNTRIES) if c == 'TR')
+        except StopIteration:
+            self.profile_country_idx = 0
+        self.profile_list_open = False
+
+        # If profile missing username, open setup
+        if not self.save_manager.data.get('profile', {}).get('username'):
+            self.show_profile_setup = True
+
+        # Leaderboard: only fetch if profile already exists
+        if not self.show_profile_setup:
+            self.refresh_leaderboard()
 
         # Core game state defaults
         self.state = STATE_INTRO
@@ -204,6 +222,36 @@ class Game:
                 self.shake_intensity = 0.0
                 self.trigger_pyro_death()
                 return
+
+    def refresh_leaderboard(self):
+        """Profil verilerini çekip network'e ver ve leaderboard'u başlat."""
+        try:
+            p_data = self.save_manager.data.get('profile', {})
+            local_user = {
+                'username': p_data.get('username'),
+                'country': p_data.get('country'),
+                'id': p_data.get('id'),
+                'score': self.save_manager.data.get('high_score', 0)
+            }
+            self.lb_manager.fetch_scores(local_user)
+        except Exception:
+            try:
+                self.lb_manager.fetch_scores()
+            except Exception:
+                pass
+
+    def save_profile(self):
+        """Profili kaydeder ve pencereyi kapatır"""
+        code, name = COUNTRIES[self.profile_country_idx]
+        self.save_manager.data['profile']['username'] = self.profile_input_text
+        self.save_manager.data['profile']['country'] = code
+        # ID already assigned in save_data by default
+        self.save_manager.save_data()
+        self.show_profile_setup = False
+        try: self.audio.play('level_up')
+        except Exception: pass
+        # Refresh leaderboard now that we have a profile
+        self.refresh_leaderboard()
 
     def trigger_pyro_death(self):
         """Handle player death when Pyro enemies reach the core.
@@ -866,6 +914,57 @@ class Game:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_f or event.key == pygame.K_F11:
                     self.toggle_fullscreen()
+
+            # --- Profile setup input handling (global modal) ---
+            if getattr(self, 'show_profile_setup', False):
+                # Keyboard handling
+                if event.type == pygame.KEYDOWN:
+                    try:
+                        uni = event.unicode
+                    except Exception:
+                        uni = ''
+                    # If country list open, navigate list
+                    if self.profile_list_open:
+                        if event.key == pygame.K_UP:
+                            self.profile_country_idx = max(0, self.profile_country_idx - 1)
+                        elif event.key == pygame.K_DOWN:
+                            self.profile_country_idx = min(len(COUNTRIES) - 1, self.profile_country_idx + 1)
+                        elif event.key == pygame.K_RETURN:
+                            self.profile_list_open = False
+                        elif isinstance(uni, str) and uni.isalpha():
+                            char = uni.upper()
+                            for i, (code, name) in enumerate(COUNTRIES):
+                                if name.upper().startswith(char):
+                                    self.profile_country_idx = i
+                                    break
+                    else:
+                        # Name input
+                        if event.key == pygame.K_BACKSPACE:
+                            self.profile_input_text = self.profile_input_text[:-1]
+                        elif event.key == pygame.K_RETURN:
+                            if len(self.profile_input_text) > 0:
+                                self.save_profile()
+                        else:
+                            if len(self.profile_input_text) < 12 and isinstance(uni, str) and uni.isalnum():
+                                self.profile_input_text += uni
+
+                # Mouse handling for profile UI
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    try:
+                        mx, my = event.pos
+                    except Exception:
+                        mx, my = pygame.mouse.get_pos()
+                    cw, ch = 500, 400
+                    cx, cy = (VIRTUAL_W - cw)//2, (VIRTUAL_H - ch)//2
+                    c_btn_rect = pygame.Rect(cx + 50, cy + 220, 400, 50)
+                    if c_btn_rect.collidepoint(mx, my):
+                        self.profile_list_open = not self.profile_list_open
+
+                    save_btn_rect = pygame.Rect(cx + 150, cy + 320, 200, 50)
+                    if save_btn_rect.collidepoint(mx, my) and len(self.profile_input_text) > 0:
+                        self.save_profile()
+
+                return
             
             if self.state == STATE_SCORING: return 
 
@@ -911,6 +1010,10 @@ class Game:
                         except Exception:
                             ex, ey = mx, my
                         if widget_rect.collidepoint(ex, ey):
+                            # If profile username missing, open profile setup instead
+                            if not self.save_manager.data.get('profile', {}).get('username'):
+                                self.show_profile_setup = True
+                                return
                             try: self.audio.play('select')
                             except Exception: pass
                             self.lb_manager.is_expanded = True
@@ -1940,6 +2043,13 @@ class Game:
                     self.ui.draw_notifications_explicit(self.screen)
                 except Exception:
                     pass
+        except Exception:
+            pass
+
+        # If profile setup modal is active, draw it above everything
+        try:
+            if getattr(self, 'show_profile_setup', False):
+                self.ui.draw_profile_setup(self.screen, self, self.profile_input_text, self.profile_list_open, self.profile_country_idx)
         except Exception:
             pass
 

@@ -1263,10 +1263,122 @@ class UIManager:
             start_y = panel_rect.y + 60
             for i, score in enumerate(getattr(manager, 'scores', [])[:5]):
                 row_y = start_y + i * 35
-                color = (100, 255, 100) if score.get('name') == 'SEN' else (220, 220, 220)
-                row_txt = f"{score.get('rank', i+1)}. {score.get('name', '???')} - {score.get('score', 0):,}"
-                r_surf = self.font_reg.render(row_txt, True, color)
-                surface.blit(r_surf, (panel_rect.x + 30, row_y))
+                color = (100, 255, 100) if score.get('is_me') else (220, 220, 220)
+
+                # 1. Ülke
+                country_txt = f"({score.get('country','--')}) "
+                c_surf = self.font_reg.render(country_txt, True, (150, 150, 150))
+
+                # 2. İsim
+                n_surf = self.font_reg.render(score.get('name', '???'), True, color)
+
+                # 3. ID (Yarı Saydam)
+                id_txt = f"#{score.get('id', '----')}"
+                id_surf = self.font_small.render(id_txt, True, (255, 255, 255))
+                try:
+                    id_surf.set_alpha(80)
+                except Exception:
+                    pass
+
+                # 4. Puan
+                s_surf = self.font_reg.render(f"{score.get('score', 0):,}", True, (255, 215, 0))
+
+                # Konumlandırma
+                curr_x = panel_rect.x + 20
+                surface.blit(c_surf, (curr_x, row_y)); curr_x += c_surf.get_width()
+                surface.blit(n_surf, (curr_x, row_y)); curr_x += n_surf.get_width() + 5
+                surface.blit(id_surf, (curr_x, row_y + 2))
+
+                # Puan en sağa
+                surface.blit(s_surf, (panel_rect.right - 20 - s_surf.get_width(), row_y))
+
+        # END leaderboard panel
+
+    def draw_profile_setup(self, surface, game, input_text, country_list_open, selected_country_idx):
+        """Profil oluşturma penceresi"""
+        # 1. Arka planı karart
+        overlay = pygame.Surface((VIRTUAL_W, VIRTUAL_H), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 220))
+        surface.blit(overlay, (0, 0))
+        
+        # 2. Ana Panel
+        cw, ch = 500, 400
+        cx, cy = (VIRTUAL_W - cw)//2, (VIRTUAL_H - ch)//2
+        panel_rect = pygame.Rect(cx, cy, cw, ch)
+        
+        pygame.draw.rect(surface, (30, 30, 40), panel_rect, border_radius=15)
+        pygame.draw.rect(surface, (255, 215, 0), panel_rect, 3, border_radius=15)
+        
+        # Başlık
+        title = self.font_bold.render("CREATE AGENT PROFILE", True, (255, 215, 0))
+        surface.blit(title, (cx + cw//2 - title.get_width()//2, cy + 30))
+        
+        # --- İSİM GİRİŞİ ---
+        lbl_name = self.font_reg.render("CODENAME:", True, (200, 200, 200))
+        surface.blit(lbl_name, (cx + 50, cy + 90))
+        
+        input_rect = pygame.Rect(cx + 50, cy + 120, 400, 50)
+        pygame.draw.rect(surface, (10, 10, 20), input_rect, border_radius=5)
+        pygame.draw.rect(surface, (100, 100, 255), input_rect, 2, border_radius=5)
+        
+        # Girilen metin + imleç
+        txt_surf = self.font_reg.render(input_text + "|", True, (255, 255, 255))
+        surface.blit(txt_surf, (input_rect.x + 10, input_rect.y + 10))
+        
+        # ID Önizleme (Yarı saydam)
+        id_preview = self.font_small.render(f"#{game.save_manager.data['profile']['id']}", True, (255, 255, 255))
+        try:
+            id_preview.set_alpha(100)
+        except Exception:
+            pass
+        surface.blit(id_preview, (input_rect.right - 60, input_rect.y + 15))
+
+        # --- ÜLKE SEÇİMİ ---
+        lbl_country = self.font_reg.render("ORIGIN:", True, (200, 200, 200))
+        surface.blit(lbl_country, (cx + 50, cy + 190))
+        
+        from settings import COUNTRIES
+        current_c_code, current_c_name = COUNTRIES[selected_country_idx]
+        
+        c_btn_rect = pygame.Rect(cx + 50, cy + 220, 400, 50)
+        pygame.draw.rect(surface, (20, 20, 30), c_btn_rect, border_radius=5)
+        pygame.draw.rect(surface, (255, 215, 0), c_btn_rect, 1, border_radius=5)
+        
+        c_txt = self.font_reg.render(f"({current_c_code}) {current_c_name} ▼", True, (255, 255, 255))
+        surface.blit(c_txt, (c_btn_rect.x + 10, c_btn_rect.y + 10))
+        
+        # --- KAYDET BUTONU ---
+        save_btn_rect = pygame.Rect(cx + 150, cy + 320, 200, 50)
+        btn_col = (0, 150, 0) if len(input_text) > 0 else (50, 50, 50)
+        pygame.draw.rect(surface, btn_col, save_btn_rect, border_radius=10)
+        
+        save_txt = self.font_bold.render("ACTIVATE", True, (255, 255, 255))
+        surface.blit(save_txt, (save_btn_rect.centerx - save_txt.get_width()//2, save_btn_rect.centery - save_txt.get_height()//2))
+
+        # --- ÜLKE LİSTESİ AÇIKSA (POPUP) ---
+        if country_list_open:
+            list_h = 300
+            list_rect = pygame.Rect(c_btn_rect.x, c_btn_rect.bottom, c_btn_rect.width, list_h)
+            
+            # Arkaplan ve Çerçeve
+            pygame.draw.rect(surface, (10, 10, 15), list_rect)
+            pygame.draw.rect(surface, (100, 100, 100), list_rect, 2)
+            
+            # Liste Elemanlarını Çiz
+            from settings import COUNTRIES as ALL_COUNTRIES
+            start_idx = max(0, selected_country_idx - 5)
+            end_idx = min(len(ALL_COUNTRIES), start_idx + 10)
+            
+            for i in range(start_idx, end_idx):
+                code, name = ALL_COUNTRIES[i]
+                y_pos = list_rect.y + (i - start_idx) * 30
+                
+                # Seçili Olanı Vurgula
+                if i == selected_country_idx:
+                    pygame.draw.rect(surface, (50, 50, 100), (list_rect.x, y_pos, list_rect.width, 30))
+                
+                row_txt = self.font_small.render(f"  {code} - {name}", True, (220, 220, 220))
+                surface.blit(row_txt, (list_rect.x, y_pos + 5))
 
     def draw_hud_elements(self, surface, game):
         self.void_widget.draw(surface)

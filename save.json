@@ -10,7 +10,13 @@
         "fullscreen": true,
         "volume": 0.0975,
         "language": "TR",
-        "music_volume": 0.13421052631578947
+        "music_volume": 0.13421052631578947,
+        "sfx_volume": 0.0975
     },
-    "high_score": 21785
+    "high_score": 21785,
+    "profile": {
+        "username": "Adil",
+        "country": "TR",
+        "id": "6713"
+    }
 }

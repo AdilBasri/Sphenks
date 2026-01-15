@@ -2,6 +2,7 @@
 import json
 import os
 import copy
+import random
 from settings import UNLOCKS
 
 
@@ -15,15 +16,13 @@ class SaveManager:
     def _get_default_data(self):
         """Returns the default save data structure."""
         return {
-            'total_debt': 1000000,
-            'debt_paid': 0,
-            'unlocked_items': [],
-            'tutorial_complete': False,
-            'settings': {
-                'fullscreen': False,
-                'volume': 0.5,
-                'language': 'EN'
-            }
+            "high_score": 0,
+            "total_debt": 1000000,
+            "debt_paid": 0,
+            "unlocked_items": [],
+            "tutorial_complete": False,
+            "settings": {"music_volume": 0.5, "sfx_volume": 0.5, "fullscreen": False, "language": "EN"},
+            "profile": {"username": None, "country": "TR", "id": f"{random.randint(1000, 9999)}"}
         }
     
     def _load_or_create(self):
@@ -34,16 +33,28 @@ class SaveManager:
                     data = json.load(f)
                 # Ensure all required keys exist (for backwards compatibility)
                 default = self._get_default_data()
-                for key in default:
+                for key, val in default.items():
                     if key not in data:
-                        data[key] = default[key]
-                # Ensure nested settings keys exist
+                        data[key] = val
+
+                # Ensure nested settings keys exist and migrate legacy `volume` -> `sfx_volume` if present
                 default_settings = default.get('settings', {})
                 data_settings = data.get('settings', {}) if isinstance(data.get('settings', {}), dict) else {}
+                # Migrate old `volume` key for compatibility
+                if 'volume' in data_settings and 'sfx_volume' not in data_settings:
+                    try:
+                        data_settings['sfx_volume'] = float(data_settings.get('volume', 0.5))
+                    except Exception:
+                        data_settings['sfx_volume'] = 0.5
                 for sk, sv in default_settings.items():
                     if sk not in data_settings:
                         data_settings[sk] = sv
                 data['settings'] = data_settings
+
+                # Ensure profile exists (backwards compatibility)
+                if 'profile' not in data or not isinstance(data.get('profile'), dict):
+                    data['profile'] = {"username": None, "country": "TR", "id": f"{random.randint(1000, 9999)}"}
+
                 return data
             except (json.JSONDecodeError, IOError):
                 # If file is corrupted, return defaults
