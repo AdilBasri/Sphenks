@@ -4,6 +4,7 @@ import sys
 import random
 import math
 from network import LeaderboardManager
+from settings import COUNTRIES, VIRTUAL_W, VIRTUAL_H
 import os
 from settings import *
 from settings import USE_FULLSCREEN, WINDOW_W, WINDOW_H, STATE_DEBT, COLLECTIBLES, STATE_COLLECTION, STATE_SETTINGS, STATE_TRAINING, RESOLUTIONS, STATE_INTRO, STATE_DEMO_END, STATE_COMING_SOON
@@ -552,17 +553,38 @@ class Game:
                 self.state = STATE_LEVEL_COMPLETE
                 self.generate_shop()
         else:
-            self.audio.play('gameover')
+            print("\n[GAME DEBUG] Oyun Bitti (Game Over) Tetiklendi!")
+            
             try:
-                if getattr(self, 'lb_manager', None):
-                    self.lb_manager.submit_score("SEN", self.score)
-            except Exception:
+                self.audio.play('gameover')
+            except:
                 pass
+                
             self.state = STATE_GAME_OVER
             self.crt.trigger_aberration(amount=3, duration=20)
             if self.score > self.high_score:
                 self.high_score = self.score
                 self.save_high_score()
+            
+            # --- SKOR GÖNDERME ---
+            if hasattr(self, 'lb_manager'):
+                print("[GAME DEBUG] Leaderboard Manager bulundu, profil çekiliyor...")
+                
+                # Kayıtlı profili al
+                profile = self.save_manager.data.get('profile', {})
+                username = profile.get('username')
+                country = profile.get('country', 'TR')
+                uid = profile.get('id', '0000')
+                
+                print(f"[GAME DEBUG] Profil Verisi -> İsim: {username}")
+                
+                if username:
+                    print("[GAME DEBUG] Skor gönderiliyor...")
+                    self.lb_manager.submit_score(username, self.score, country, uid)
+                else:
+                    print("[GAME DEBUG] HATA: İsim bulunamadı (None), gönderilmiyor.")
+            else:
+                print("[GAME DEBUG] HATA: lb_manager yok!")
 
     def save_high_score(self):
         """Persist the current high score to save data."""
@@ -1016,6 +1038,18 @@ class Game:
                                 return
                             try: self.audio.play('select')
                             except Exception: pass
+                            
+                            # EKLENECEK KISIM: Profil verisini hazırla ve Yenileme isteği at
+                            p = self.save_manager.data.get('profile', {})
+                            local_data = {
+                                'username': p.get('username'),
+                                'country': p.get('country'),
+                                'id': p.get('id'),
+                                'score': self.save_manager.data.get('high_score', 0)
+                            }
+                            # LİSTEYİ ŞİMDİ GÜNCELLE!
+                            self.lb_manager.fetch_scores(local_data)
+                            
                             self.lb_manager.is_expanded = True
                             return
 

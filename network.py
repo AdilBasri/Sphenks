@@ -1,5 +1,7 @@
 import threading
-import time
+import requests
+import json
+from settings import LB_URL, LB_PUBLIC_KEY, LB_PRIVATE_KEY
 
 class LeaderboardManager:
     def __init__(self):
@@ -9,62 +11,97 @@ class LeaderboardManager:
         self.user_best = 0
         self.is_expanded = False
         
-    def fetch_scores(self, local_user_data):
-        """
-        local_user_data: {'username': 'Adil', 'score': 2000, 'country': 'TR', 'id': '1234'}
-        """
+    def fetch_scores(self, local_user_data=None):
         if self.status == 'LOADING': return
         self.status = 'LOADING'
-        
-        # Thread başlatırken yerel veriyi de gönderelim
         t = threading.Thread(target=self._fetch_thread, args=(local_user_data,))
         t.daemon = True
         t.start()
         
     def _fetch_thread(self, local_user):
         try:
-            time.sleep(0.5) # Gerçekçilik için minik gecikme
+            resp = requests.get(f"{LB_URL}/{LB_PUBLIC_KEY}/json", timeout=5)
             
-            # --- GERÇEKÇİ SABİT VERİLER ---
-            # (İstediğin spesifik oyuncular)
-            server_scores = [
-                {'rank': 1, 'name': 'Fefe', 'id': '1905', 'score': 51054, 'country': 'TR'},
-                {'rank': 2, 'name': 'BlackGhost', 'id': '0007', 'score': 36745, 'country': 'US'},
-                {'rank': 3, 'name': 'OsiCardi', 'id': '1999', 'score': 33467, 'country': 'TR'},
-                # Doldurmalık birkaç gerçekçi veri daha
-                {'rank': 4, 'name': 'HansM', 'id': '4421', 'score': 28900, 'country': 'DE'},
-                {'rank': 5, 'name': 'Sakura', 'id': '8888', 'score': 25400, 'country': 'JP'},
-            ]
+            if resp.status_code != 200:
+                self.status = 'ERROR'
+                return
+
+            data = resp.json()
+            server_scores = []
             
-            # Yerel Oyuncuyu Listeye Dahil Etme Mantığı
-            if local_user and local_user.get('username'):
-                my_score = local_user['score']
-                my_entry = {
-                    'name': local_user['username'],
-                    'id': local_user['id'],
-                    'score': my_score,
-                    'country': local_user['country'],
-                    'is_me': True # Kendimiz olduğunu bilelim
-                }
-                server_scores.append(my_entry)
-            
-            # Puana göre sırala (Büyükten küçüğe)
-            server_scores.sort(key=lambda x: x['score'], reverse=True)
-            
-            # Rankleri yeniden dağıt
-            for i, s in enumerate(server_scores):
-                s['rank'] = i + 1
-                if s.get('is_me'):
-                    self.user_rank = s['rank']
-                    self.user_best = s['score']
+            if 'dreamlo' in data and 'leaderboard' in data['dreamlo']:
+                entries = data['dreamlo']['leaderboard']
+                if entries is None: # Liste boşsa
+                    entries = {}
+                
+                if 'entry' in entries:
+                    entry_list = entries['entry']
+                    if isinstance(entry_list, dict): entry_list = [entry_list]
+                else:
+                    entry_list = []
+
+                for entry in entry_list:
+                    raw_name = entry['name']
+                    score = int(entry['score'])
+                    
+                    # FORMAT DEĞİŞİKLİĞİ: Artık "-" (tire) ile ayırıyoruz
+                    # Örnek: TR-Adil-1234
+                    parts = raw_name.split('-')
+                    
+                    if len(parts) >= 3:
+                        country = parts[0]
+                        uid = parts[-1] # Son parça ID'dir
+                        # İsim arada kalan her şey olabilir (İsimde tire varsa bozulmasın)
+                        name = "-".join(parts[1:-1]) 
+                    else:
+                        country, name, uid = "UNK", raw_name, "????"
+
+                    server_scores.append({'name': name, 'country': country, 'id': uid, 'score': score})
 
             self.scores = server_scores
+            
+            # Kendi sıranı bul
+            self.user_rank = '---'
+            if local_user and local_user.get('id'):
+                for i, s in enumerate(self.scores):
+                    s['rank'] = i + 1
+                    if str(s['id']) == str(local_user['id']):
+                        self.user_rank = s['rank']
+                        self.user_best = s['score']
+                        s['is_me'] = True
+            
             self.status = 'READY'
             
         except Exception as e:
             print(f"Network Error: {e}")
             self.status = 'ERROR'
             
-    def submit_score(self, name, score):
-        # Burası ileride gerçek API'ye bağlanacak
-        pass
+    def submit_score(self, username, score, country="TR", uid="0000"):
+        print(f"\n[NETWORK DEBUG] submit_score ÇAĞRILDI!")
+        print(f"   -> İsim: {username}, Puan: {score}, Ülke: {country}, ID: {uid}")
+        
+        # Thread yerine direkt çağırıyoruz (Oyun kapanmadan gitsin diye)
+        self._submit_thread(username, score, country, uid)
+
+    def _submit_thread(self, username, score, country, uid):
+        try:
+            # GÜVENLİK: İki nokta ve boşlukları temizle
+            safe_username = str(username).replace("-", "_").replace(":", "").replace(" ", "_")
+            safe_name = f"{country}-{safe_username}-{uid}"
+            
+            url = f"{LB_URL}/{LB_PRIVATE_KEY}/add/{safe_name}/{score}"
+            
+            print(f"   -> URL Oluşturuldu: {url}")
+            print("   -> İstek gönderiliyor...")
+            
+            resp = requests.get(url, timeout=5)
+            
+            print(f"   -> SUNUCU CEVABI: {resp.status_code} - {resp.text}")
+            
+            if resp.status_code == 200:
+                print("   -> [BAŞARILI] Skor Dreamlo'ya ulaştı.")
+            else:
+                print("   -> [HATA] Sunucu 200 dönmedi.")
+                
+        except Exception as e:
+            print(f"   -> [KRİTİK HATA] Network hatası: {e}")

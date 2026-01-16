@@ -659,3 +659,7 @@ UNLOCKS = {
         'reward': 'Unlocks: Eye of Ra (1.5x Global Mult)'
     }
 }
+
+LB_PUBLIC_KEY = "696a04b88f40bb1184afca3b" 
+LB_PRIVATE_KEY = "mx9w1i0f9UCFE86aL8VXcgPWKcqkiSTkyrTswGqz-1zQ"
+LB_URL = "http://dreamlo.com/lb"

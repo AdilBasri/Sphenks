@@ -1,9 +1,11 @@
 {
+    "high_score": 21785,
     "total_debt": 1000000,
-    "debt_paid": 12770,
+    "debt_paid": 27684,
     "unlocked_items": [
         "tiny_bag",
-        "blueprint"
+        "blueprint",
+        "gamblers_coin"
     ],
     "tutorial_complete": false,
     "settings": {
@@ -13,10 +15,9 @@
         "music_volume": 0.13421052631578947,
         "sfx_volume": 0.0975
     },
-    "high_score": 21785,
     "profile": {
         "username": "Adil",
         "country": "TR",
-        "id": "6713"
+        "id": "7852"
     }
 }

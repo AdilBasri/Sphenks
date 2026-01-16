@@ -2566,3 +2566,79 @@ class UIManager:
                 surface.blit(msg, (rect.x + 10, rect.y + 32))
             except Exception:
                 pass
+
+    def draw_profile_setup(self, surface, game, input_text, country_list_open, selected_country_idx):
+        from settings import COUNTRIES, VIRTUAL_W, VIRTUAL_H
+        
+        # Karartma
+        overlay = pygame.Surface((VIRTUAL_W, VIRTUAL_H), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 220))
+        surface.blit(overlay, (0, 0))
+        
+        # Panel
+        cw, ch = 500, 400
+        cx, cy = (VIRTUAL_W - cw)//2, (VIRTUAL_H - ch)//2
+        panel_rect = pygame.Rect(cx, cy, cw, ch)
+        
+        pygame.draw.rect(surface, (30, 30, 40), panel_rect, border_radius=15)
+        pygame.draw.rect(surface, (255, 215, 0), panel_rect, 3, border_radius=15)
+        
+        # Başlık
+        title = self.font_bold.render("AGENT PROFILE", True, (255, 215, 0))
+        surface.blit(title, (cx + cw//2 - title.get_width()//2, cy + 30))
+        
+        # İsim Kutusu
+        lbl_name = self.font_reg.render("CODENAME:", True, (200, 200, 200))
+        surface.blit(lbl_name, (cx + 50, cy + 90))
+        
+        input_rect = pygame.Rect(cx + 50, cy + 120, 400, 50)
+        pygame.draw.rect(surface, (10, 10, 20), input_rect, border_radius=5)
+        pygame.draw.rect(surface, (100, 100, 255), input_rect, 2, border_radius=5)
+        
+        txt_surf = self.font_reg.render(input_text + "|", True, (255, 255, 255))
+        surface.blit(txt_surf, (input_rect.x + 10, input_rect.y + 10))
+        
+        # Ülke Seçimi
+        lbl_country = self.font_reg.render("ORIGIN:", True, (200, 200, 200))
+        surface.blit(lbl_country, (cx + 50, cy + 190))
+        
+        # Güvenlik: Liste boşsa hata vermesin
+        if not COUNTRIES: 
+            c_text = "UNKNOWN"
+        else:
+            code, name = COUNTRIES[selected_country_idx]
+            c_text = f"({code}) {name}"
+            
+        c_btn_rect = pygame.Rect(cx + 50, cy + 220, 400, 50)
+        pygame.draw.rect(surface, (20, 20, 30), c_btn_rect, border_radius=5)
+        pygame.draw.rect(surface, (255, 215, 0), c_btn_rect, 1, border_radius=5)
+        
+        surf_c = self.font_reg.render(c_text + " ▼", True, (255, 255, 255))
+        surface.blit(surf_c, (c_btn_rect.x + 10, c_btn_rect.y + 10))
+        
+        # Kaydet Butonu
+        save_btn_rect = pygame.Rect(cx + 150, cy + 320, 200, 50)
+        col = (0, 150, 0) if len(input_text) > 0 else (50, 50, 50)
+        pygame.draw.rect(surface, col, save_btn_rect, border_radius=10)
+        
+        save_txt = self.font_bold.render("ACTIVATE", True, (255, 255, 255))
+        surface.blit(save_txt, (save_btn_rect.centerx - save_txt.get_width()//2, save_btn_rect.centery - save_txt.get_height()//2))
+
+        # Açılır Liste (Popup)
+        if country_list_open and COUNTRIES:
+            list_h = 300
+            list_rect = pygame.Rect(c_btn_rect.x, c_btn_rect.bottom, c_btn_rect.width, list_h)
+            pygame.draw.rect(surface, (10, 10, 15), list_rect)
+            pygame.draw.rect(surface, (100, 100, 100), list_rect, 2)
+            
+            start = max(0, selected_country_idx - 5)
+            end = min(len(COUNTRIES), start + 10)
+            
+            for i in range(start, end):
+                code, name = COUNTRIES[i]
+                y = list_rect.y + (i - start) * 30
+                if i == selected_country_idx:
+                    pygame.draw.rect(surface, (50, 50, 100), (list_rect.x, y, list_rect.width, 30))
+                
+                t = self.font_small.render(f"  {code} - {name}", True, (200, 200, 200))
+                surface.blit(t, (list_rect.x, y + 5))
